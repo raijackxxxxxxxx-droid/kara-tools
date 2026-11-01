@@ -44,6 +44,12 @@
   .checker{border:1px solid var(--line); border-radius:10px; padding:10px;
     background:repeating-conic-gradient(#2c313e 0% 25%, #232733 0% 50%) 0 0/22px 22px;
     text-align:center; overflow-x:auto;}
+  #outBox.mode-black .checker{background:#000;}
+  #outBox.mode-white .checker{background:#ffffff;}
+  .bgbar{display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;}
+  .bgbar .cap{font-size:13px; color:var(--sub);}
+  .bgbtn{font-size:13px; padding:7px 14px; border-radius:999px;}
+  .bgbtn.on{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
   .checker img{max-width:100%; height:auto;}
   .itemrow{display:flex; gap:8px; align-items:center; margin-top:8px;}
   .fname{flex:1; font-size:13px; color:var(--sub); word-break:break-all;}
@@ -125,7 +131,14 @@
     <div id="msg" class="msg"></div>
   </div>
 
-  <div class="out" id="outBox" style="display:none;">
+  <div class="out mode-checker" id="outBox" style="display:none;">
+    <div class="bgbar">
+      <span class="cap">プレビューの背景</span>
+      <button class="bgbtn on" data-mode="mode-checker">チェック</button>
+      <button class="bgbtn" data-mode="mode-black">黒</button>
+      <button class="bgbtn" data-mode="mode-white">白</button>
+      <span class="cap">※書き出す画像は常に透明です</span>
+    </div>
     <div id="outList"></div>
   </div>
 
@@ -312,6 +325,15 @@
   });
   $("textInput").addEventListener("input", scheduleRegen);
   $("genBtn").addEventListener("click", generate);
+
+  Array.prototype.forEach.call(document.querySelectorAll(".bgbtn"), function(btn){
+    btn.addEventListener("click", function(){
+      $("outBox").className = "out " + btn.getAttribute("data-mode");
+      Array.prototype.forEach.call(document.querySelectorAll(".bgbtn"), function(b){
+        b.classList.toggle("on", b === btn);
+      });
+    });
+  });
 
   generate();
 })();
