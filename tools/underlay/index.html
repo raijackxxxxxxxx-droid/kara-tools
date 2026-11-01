@@ -75,6 +75,9 @@
       <button data-preset="top">上帯</button>
       <button data-preset="full">全体を少し暗く</button>
       <button data-preset="vignette">周りを少し暗く</button>
+      <button data-preset="bottomWhite">下帯・白</button>
+      <button data-preset="fullLight">全体を少し明るく</button>
+      <button data-preset="vignetteWhite">周りを少し明るく</button>
     </div>
     <div class="row" style="margin-top:14px;">
       <label for="alphaRange">濃さの微調整</label>
@@ -104,7 +107,7 @@
 
   <div class="card foot">
     <b>使い方・注意</b><br>
-    ・下地のプリセットは「下帯・標準」が文字置き場の定番です。明るい画像で文字が埋もれそうなら「下帯・強め」を。真ん中を引き締めたいときは「周りを少し暗く」もどうぞ。<br>
+    ・下地のプリセットは「下帯・標準」が文字置き場の定番です。明るい画像で文字が埋もれそうなら「下帯・強め」を。真ん中を引き締めたいときは「周りを少し暗く」もどうぞ。白系（下帯・白など）は濃い色の文字用です。<br>
     ・両脇ぼかしは、ぼかした背景を少し暗くしてあるので、そのまま文字も載せやすいです。<br>
     ・画像はブラウザの中でだけ処理され、外部に送信されることはありません。ネット接続も不要です。<br>
     ・とても大きい画像は、スマホでは処理に時間がかかったり、保存に失敗したりすることがあります。その場合はPCで試してください。
@@ -129,7 +132,10 @@
     bottomStrong: { kind: "band", pos: "bottom", height: 0.55, alpha: 0.85 },
     top:          { kind: "band", pos: "top",    height: 0.30, alpha: 0.62 },
     full:         { kind: "full", alpha: 0.32 },
-    vignette:     { kind: "vignette", alpha: 0.50 }
+    vignette:     { kind: "vignette", alpha: 0.50 },
+    bottomWhite:  { kind: "band", pos: "bottom", height: 0.38, alpha: 0.78, color: "255,255,255" },
+    fullLight:    { kind: "full", alpha: 0.25, color: "255,255,255" },
+    vignetteWhite:{ kind: "vignette", alpha: 0.50, color: "255,255,255" }
   };
 
   function show(id, on){ $(id).style.display = on ? "block" : "none"; }
@@ -173,8 +179,9 @@
     var p = PRESETS[preset];
     if (!p) return;
     var s = alphaScale();
+    var col = p.color || "0,0,0";
     if (p.kind === "full"){
-      ctx.fillStyle = "rgba(0,0,0," + Math.min(1, p.alpha * s).toFixed(3) + ")";
+      ctx.fillStyle = "rgba(" + col + "," + Math.min(1, p.alpha * s).toFixed(3) + ")";
       ctx.fillRect(0, 0, W, H);
       return;
     }
@@ -183,8 +190,8 @@
       var r0 = Math.min(W, H) * 0.42;
       var r1 = Math.sqrt(cx * cx + cy * cy);
       var vg = ctx.createRadialGradient(cx, cy, r0, cx, cy, r1);
-      vg.addColorStop(0, "rgba(0,0,0,0)");
-      vg.addColorStop(1, "rgba(0,0,0," + Math.min(1, p.alpha * s).toFixed(3) + ")");
+      vg.addColorStop(0, "rgba(" + col + ",0)");
+      vg.addColorStop(1, "rgba(" + col + "," + Math.min(1, p.alpha * s).toFixed(3) + ")");
       ctx.fillStyle = vg;
       ctx.fillRect(0, 0, W, H);
       return;
@@ -195,14 +202,14 @@
     if (p.pos === "bottom"){
       y0 = H - bh;
       g = ctx.createLinearGradient(0, y0, 0, H);
-      g.addColorStop(0, "rgba(0,0,0,0)");
-      g.addColorStop(1, "rgba(0,0,0," + a + ")");
+      g.addColorStop(0, "rgba(" + col + ",0)");
+      g.addColorStop(1, "rgba(" + col + "," + a + ")");
       ctx.fillStyle = g;
       ctx.fillRect(0, y0, W, bh);
     } else {
       g = ctx.createLinearGradient(0, 0, 0, bh);
-      g.addColorStop(0, "rgba(0,0,0," + a + ")");
-      g.addColorStop(1, "rgba(0,0,0,0)");
+      g.addColorStop(0, "rgba(" + col + "," + a + ")");
+      g.addColorStop(1, "rgba(" + col + ",0)");
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, bh);
     }
