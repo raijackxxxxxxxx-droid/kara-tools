@@ -46,7 +46,7 @@
 <body>
 <div class="wrap">
   <h1>🖼️ 下地づくり君（仮）</h1>
-  <p class="lead">画像に「文字を載せるための下地」を付けるだけのツールです。下帯などのプリセットを選ぶだけ。縦画像を16:9に収める両脇ぼかしもできます。文字入れは、もじPNGメーカーなどお好みの道具でどうぞ。</p>
+  <p class="lead">画像に「文字を載せるための下地」を付けるだけのツールです。下帯などのプリセットを選ぶだけ。縦画像を16:9に収める枠埋め（ぼかし／黒／白）もできます。文字入れは、もじPNGメーカーなどお好みの道具でどうぞ。</p>
 
   <div class="card">
     <h2>1. 画像を開く</h2>
@@ -62,7 +62,7 @@
     <h2>2. やりたいこと</h2>
     <div class="seg" id="modeSeg">
       <button data-mode="underlay" class="on">文字の下地</button>
-      <button data-mode="frame">16:9・両脇ぼかし</button>
+      <button data-mode="frame">16:9・枠に収める</button>
     </div>
   </div>
 
@@ -88,7 +88,13 @@
 
   <div class="card" id="frameCard" style="display:none;">
     <h2>3. 枠に収める</h2>
-    <p class="lead" style="margin:0;">画像を16:9の真ん中に置き、余った両脇（縦画像のとき）や上下（横長すぎる画像のとき）を、画像自体をぼかして伸ばした背景で埋めます。設定は不要です。</p>
+    <p class="lead">画像を16:9の真ん中に置き、余った両脇（縦画像のとき）や上下（横長すぎる画像のとき）の埋め方を選びます。</p>
+    <div class="seg" id="fillSeg">
+      <button data-fill="blur" class="on">ぼかし</button>
+      <button data-fill="black">黒</button>
+      <button data-fill="white">白</button>
+    </div>
+    <p class="lead" style="margin:10px 0 0;">ぼかしは画像自体を引き伸ばしてぼかした背景（少し暗くしてあるので文字も載せやすい）、黒は放送やプレイヤーの標準、白は明るいデザイン向けです。</p>
   </div>
 
   <div class="card" id="outCard" style="display:none;">
@@ -108,7 +114,7 @@
   <div class="card foot">
     <b>使い方・注意</b><br>
     ・下地のプリセットは「下帯・標準」が文字置き場の定番です。明るい画像で文字が埋もれそうなら「下帯・強め」を。真ん中を引き締めたいときは「周りを少し暗く」もどうぞ。白系（下帯・白など）は濃い色の文字用です。<br>
-    ・両脇ぼかしは、ぼかした背景を少し暗くしてあるので、そのまま文字も載せやすいです。<br>
+    ・枠に収める「ぼかし」は、ぼかした背景を少し暗くしてあるので、そのまま文字も載せやすいです。<br>
     ・画像はブラウザの中でだけ処理され、外部に送信されることはありません。ネット接続も不要です。<br>
     ・とても大きい画像は、スマホでは処理に時間がかかったり、保存に失敗したりすることがあります。その場合はPCで試してください。
   </div>
@@ -123,7 +129,8 @@
 
   var img = null;          // 読み込んだ画像（HTMLImageElement）
   var mode = "underlay";   // underlay | frame
-  var preset = "bottom";   // none | bottom | bottomStrong | top | full
+  var preset = "bottom";   // none | bottom | bottomStrong | top | full | vignette | bottomWhite | fullLight | vignetteWhite
+  var fill = "blur";       // blur | black | white
   var resultUrl = null;
 
   var PRESETS = {
@@ -256,10 +263,15 @@
       if (iw / ih > 16 / 9){ W = iw; H = Math.round(iw * 9 / 16); }
       else { H = ih; W = Math.round(ih * 16 / 9); }
       cv.width = W; cv.height = H;
-      drawBlurredCover(ctx, W, H);
-      // 背景を少し暗くする（濃さスライダーで調整可）
-      ctx.fillStyle = "rgba(0,0,0," + (0.12 * alphaScale()).toFixed(3) + ")";
-      ctx.fillRect(0, 0, W, H);
+      if (fill === "blur"){
+        drawBlurredCover(ctx, W, H);
+        // 背景を少し暗くする（濃さスライダーで調整可）
+        ctx.fillStyle = "rgba(0,0,0," + (0.12 * alphaScale()).toFixed(3) + ")";
+        ctx.fillRect(0, 0, W, H);
+      } else {
+        ctx.fillStyle = fill === "black" ? "#000000" : "#ffffff";
+        ctx.fillRect(0, 0, W, H);
+      }
       ctx.drawImage(img, Math.round((W - iw) / 2), Math.round((H - ih) / 2));
     }
     $("msg").textContent = "出力サイズ: " + cv.width + "×" + cv.height + "px";
@@ -320,6 +332,10 @@
   });
   segWire("presetSeg", "data-preset", function(v){
     preset = v;
+    render();
+  });
+  segWire("fillSeg", "data-fill", function(v){
+    fill = v;
     render();
   });
   $("alphaRange").addEventListener("input", function(){
