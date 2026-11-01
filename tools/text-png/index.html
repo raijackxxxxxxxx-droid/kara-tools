@@ -49,6 +49,12 @@
   .fname{flex:1; font-size:13px; color:var(--sub); word-break:break-all;}
   a.dl{display:inline-block; font-size:14px; padding:9px 14px; border-radius:10px; text-decoration:none;
     background:var(--btn); color:var(--btn-text); border:1px solid var(--line);}
+  .set{margin-bottom:16px;}
+  .set:last-child{margin-bottom:0;}
+  .lab{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;}
+  .lname{font-size:14px; color:var(--sub);}
+  select.full{width:100%;}
+  input[type="range"].full{width:100%; flex:none; min-width:0;}
   .msg{min-height:20px; font-size:13px; color:var(--accent); margin-top:8px;}
   .foot{color:var(--sub); font-size:12px; line-height:1.7;}
   .foot b{color:var(--text);}
@@ -68,46 +74,46 @@
 
   <div class="card">
     <h2>見た目の設定</h2>
-    <div class="row">
-      <label for="fontSel">フォント</label>
-      <select id="fontSel">
+    <div class="set">
+      <div class="lab"><span class="lname">フォント</span></div>
+      <select id="fontSel" class="full">
         <option value="'Noto Sans JP',sans-serif" selected>Noto Sans JP（ゴシック）</option>
         <option value="'M PLUS Rounded 1c',sans-serif">M PLUS Rounded 1c（丸ゴシック）</option>
         <option value="'Shippori Mincho',serif">しっぽり明朝</option>
         <option value="'Kaisei Decol',serif">解星デコール（装飾）</option>
         <option value="'Yusei Magic',sans-serif">Yusei Magic（手書き風）</option>
       </select>
-      <select id="weightSel">
+      <select id="weightSel" class="full" style="margin-top:8px;">
         <option value="400">通常</option>
         <option value="700" selected>太字</option>
         <option value="900">極太</option>
       </select>
     </div>
-    <div class="row">
-      <label for="sizeRange">サイズ</label>
-      <input type="range" id="sizeRange" min="32" max="240" value="96">
-      <span class="val" id="sizeVal">96px</span>
-      <label for="padRange">余白</label>
-      <input type="range" id="padRange" min="0" max="60" value="16">
-      <span class="val" id="padVal">16px</span>
+    <div class="set">
+      <div class="lab"><span class="lname">サイズ</span><span class="val" id="sizeVal">96px</span></div>
+      <input type="range" class="full" id="sizeRange" min="32" max="240" value="96">
     </div>
-    <div class="row">
-      <label for="textColor">文字色</label>
-      <input type="color" id="textColor" value="#ffffff">
-      <label for="strokeRange">縁取り</label>
-      <input type="range" id="strokeRange" min="0" max="24" value="6">
-      <span class="val" id="strokeVal">6px</span>
-      <input type="color" id="strokeColor" value="#22242c">
+    <div class="set">
+      <div class="lab"><span class="lname">余白</span><span class="val" id="padVal">16px</span></div>
+      <input type="range" class="full" id="padRange" min="0" max="60" value="16">
     </div>
-    <div class="row">
-      <label><input type="checkbox" id="shadowOn" checked> 影</label>
-      <input type="color" id="shadowColor" value="#000000">
-      <label for="shadowBlur">ぼかし</label>
-      <input type="range" id="shadowBlur" min="0" max="40" value="8">
-      <span class="val" id="shadowBlurVal">8px</span>
-      <label for="shadowOff">距離</label>
-      <input type="range" id="shadowOff" min="0" max="30" value="5">
-      <span class="val" id="shadowOffVal">5px</span>
+    <div class="set">
+      <div class="lab"><span class="lname">文字色</span><input type="color" id="textColor" value="#ffffff"></div>
+    </div>
+    <div class="set">
+      <div class="lab"><span class="lname">縁取り</span><span style="display:flex; align-items:center; gap:8px;"><span class="val" id="strokeVal">6px</span><input type="color" id="strokeColor" value="#22242c"></span></div>
+      <input type="range" class="full" id="strokeRange" min="0" max="24" value="6">
+    </div>
+    <div class="set">
+      <div class="lab"><span class="lname"><label style="color:var(--text); font-size:15px;"><input type="checkbox" id="shadowOn" checked> 影</label></span><input type="color" id="shadowColor" value="#000000"></div>
+    </div>
+    <div class="set">
+      <div class="lab"><span class="lname">影のぼかし</span><span class="val" id="shadowBlurVal">8px</span></div>
+      <input type="range" class="full" id="shadowBlur" min="0" max="40" value="8">
+    </div>
+    <div class="set">
+      <div class="lab"><span class="lname">影の距離</span><span class="val" id="shadowOffVal">5px</span></div>
+      <input type="range" class="full" id="shadowOff" min="0" max="30" value="5">
     </div>
   </div>
 
