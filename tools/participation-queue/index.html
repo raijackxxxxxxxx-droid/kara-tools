@@ -47,6 +47,7 @@
   .badge{flex:none; font-size:13px; background:#11141b; border:1px solid var(--line);
     border-radius:999px; padding:4px 10px; color:var(--accent);}
   .pbtn{flex:none; width:48px; height:48px; font-size:22px; padding:0; border-radius:12px;}
+  .pbtn.ret{font-size:15px; width:56px;}
   .del{flex:none; width:40px; height:48px; padding:0; font-size:16px; color:var(--sub);}
   .empty{color:var(--sub); text-align:center; padding:18px 0; font-size:14px;}
   .msg{min-height:20px; font-size:13px; color:var(--accent); margin-top:8px;}
@@ -113,7 +114,7 @@
   <div class="card foot">
     <b>使い方</b><br>
     ・名前を追加すると、参加回数が一番少ない人から枠の人数だけ光ります（同点なら先に来た人から）。<br>
-    ・一時離脱（トイレ・お風呂など）はその人の <b>+</b> を押すと光が消えて次の人へ。戻ってきたら <b>−</b> で復帰します。並び順は変わりません。<br>
+    ・一時離脱（トイレ・お風呂など）はその人の <b>+</b> を押すと光が消えて次の人へ。戻ってきたら <b>復帰</b> を押すと、その時点の一番少ない人の回数−1に自動で合わさります。離席中に回数が進んでいても、1回だけ優先的に入って合流できます。並び順は変わりません。<br>
     ・表示は到着順のまま固定です。リストが勝手にシャッフルされることはありません。<br>
     ・データは保存されません。ページを閉じたり再読み込みするとリセットされます（無料版の仕様です）。
   </div>
@@ -188,9 +189,16 @@
       li.appendChild(plus);
 
       var minus = document.createElement("button");
-      minus.className = "pbtn"; minus.textContent = "−";
-      minus.title = "回数-1（復帰）";
-      minus.addEventListener("click", function(){ if (p.count > 0) p.count--; render(); });
+      minus.className = "pbtn ret"; minus.textContent = "復帰";
+      minus.title = "復帰（その時点の一番少ない人の回数−1に合わせます）";
+      minus.addEventListener("click", function(){
+        var others = people.filter(function(q){ return q.seq !== p.seq; });
+        if (others.length){
+          var m = Math.min.apply(null, others.map(function(q){ return q.count; }));
+          p.count = Math.max(m - 1, 0);
+        }
+        render();
+      });
       li.appendChild(minus);
 
       var del = document.createElement("button");
