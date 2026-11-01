@@ -59,10 +59,19 @@
   </div>
 
   <div class="card" id="modeCard" style="display:none;">
-    <h2>2. やりたいこと</h2>
-    <div class="seg" id="modeSeg">
-      <button data-mode="underlay" class="on">文字の下地</button>
-      <button data-mode="frame">16:9・枠に収める</button>
+    <h2>2. 形</h2>
+    <div class="seg" id="frameSeg">
+      <button data-frame="off" class="on">そのまま</button>
+      <button data-frame="on">16:9に収める</button>
+    </div>
+    <div id="fillWrap" style="display:none; margin-top:14px;">
+      <p class="lead" style="margin:0 0 8px;">余った両脇（縦画像のとき）や上下（横長すぎる画像のとき）の埋め方</p>
+      <div class="seg" id="fillSeg">
+        <button data-fill="blur" class="on">ぼかし</button>
+        <button data-fill="black">黒</button>
+        <button data-fill="white">白</button>
+      </div>
+      <p class="lead" style="margin:10px 0 0;">ぼかしは画像自体を引き伸ばしてぼかした背景（少し暗くしてあるので文字も載せやすい）、黒は放送やプレイヤーの標準、白は明るいデザイン向けです。</p>
     </div>
   </div>
 
@@ -84,17 +93,6 @@
       <input type="range" id="alphaRange" min="50" max="150" value="100">
       <span class="val" id="alphaVal">100%</span>
     </div>
-  </div>
-
-  <div class="card" id="frameCard" style="display:none;">
-    <h2>3. 枠に収める</h2>
-    <p class="lead">画像を16:9の真ん中に置き、余った両脇（縦画像のとき）や上下（横長すぎる画像のとき）の埋め方を選びます。</p>
-    <div class="seg" id="fillSeg">
-      <button data-fill="blur" class="on">ぼかし</button>
-      <button data-fill="black">黒</button>
-      <button data-fill="white">白</button>
-    </div>
-    <p class="lead" style="margin:10px 0 0;">ぼかしは画像自体を引き伸ばしてぼかした背景（少し暗くしてあるので文字も載せやすい）、黒は放送やプレイヤーの標準、白は明るいデザイン向けです。</p>
   </div>
 
   <div class="card" id="outCard" style="display:none;">
@@ -128,7 +126,7 @@
   var $ = function(id){ return document.getElementById(id); };
 
   var img = null;          // 読み込んだ画像（HTMLImageElement）
-  var mode = "underlay";   // underlay | frame
+  var frameOn = false;     // true で16:9に収める
   var preset = "bottom";   // none | bottom | bottomStrong | top | full | vignette | bottomWhite | fullLight | vignetteWhite
   var fill = "blur";       // blur | black | white
   var resultUrl = null;
@@ -164,6 +162,7 @@
       }
       show("modeCard", true);
       applyModeVisibility();
+      show("presetCard", true);
       show("outCard", true);
       render();
     };
@@ -174,8 +173,7 @@
   }
 
   function applyModeVisibility(){
-    show("presetCard", mode === "underlay");
-    show("frameCard", mode === "frame");
+    show("fillWrap", frameOn);
   }
 
   function alphaScale(){
@@ -253,10 +251,9 @@
     var cv = $("cv");
     var ctx = cv.getContext("2d");
     var iw = img.naturalWidth, ih = img.naturalHeight;
-    if (mode === "underlay"){
+    if (!frameOn){
       cv.width = iw; cv.height = ih;
       ctx.drawImage(img, 0, 0);
-      drawUnderlay(ctx, iw, ih);
     } else {
       // 16:9 の箱に、画像を等倍のまま真ん中に置く
       var W, H;
@@ -274,6 +271,8 @@
       }
       ctx.drawImage(img, Math.round((W - iw) / 2), Math.round((H - ih) / 2));
     }
+    // 下地は、形を決めた後の画像全体に重ねる
+    drawUnderlay(ctx, cv.width, cv.height);
     $("msg").textContent = "出力サイズ: " + cv.width + "×" + cv.height + "px";
     $("resultBox").style.display = "none";
   }
@@ -325,8 +324,8 @@
       });
     });
   }
-  segWire("modeSeg", "data-mode", function(v){
-    mode = v;
+  segWire("frameSeg", "data-frame", function(v){
+    frameOn = v === "on";
     applyModeVisibility();
     render();
   });
