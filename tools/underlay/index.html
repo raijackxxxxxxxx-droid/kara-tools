@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>下地づくり君（仮）— サムネ用の下地と両脇ぼかしを作るツール</title>
+<style>
+  :root{
+    --bg:#171a21; --panel:#21252f; --panel2:#282d3a; --line:#3a4152;
+    --text:#eef1f6; --sub:#9aa5b5; --accent:#ffd34d; --accent-text:#231a00;
+    --btn:#39415a; --btn-text:#eef1f6;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--text);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;}
+  .wrap{max-width:720px; margin:0 auto; padding:16px 14px 40px;}
+  h1{font-size:20px; margin:6px 0 2px;}
+  .lead{color:var(--sub); font-size:13px; margin:0 0 14px; line-height:1.6;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px;}
+  .card h2{font-size:14px; margin:0 0 10px; color:var(--sub); font-weight:600; letter-spacing:.05em;}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
+  .row:last-child{margin-bottom:0;}
+  button{font-size:16px; padding:12px 16px; border-radius:10px; border:1px solid var(--line);
+    background:var(--btn); color:var(--btn-text); cursor:pointer;}
+  button:active{transform:scale(.97);}
+  button.primary{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  button:disabled{opacity:.45; cursor:default;}
+  input[type="range"]{flex:1; min-width:110px; accent-color:var(--accent);}
+  label{font-size:14px; color:var(--sub);}
+  .val{font-size:13px; color:var(--text); min-width:44px; text-align:right;}
+  .seg{display:flex; gap:8px; flex-wrap:wrap;}
+  .seg button{font-size:14px; padding:9px 14px; border-radius:999px;}
+  .seg button.on{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  .drop{border:2px dashed var(--line); border-radius:12px; padding:22px 12px; text-align:center;
+    color:var(--sub); font-size:14px; line-height:1.7; cursor:pointer;}
+  .drop b{color:var(--text); font-size:16px;}
+  .prevbox{border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--panel2);
+    text-align:center;}
+  .prevbox canvas{max-width:100%; height:auto;}
+  .prevbox img{max-width:100%; height:auto;}
+  .msg{min-height:20px; font-size:13px; color:var(--accent); margin-top:8px;}
+  .foot{color:var(--sub); font-size:12px; line-height:1.7;}
+  .foot b{color:var(--text);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🖼️ 下地づくり君（仮）</h1>
+  <p class="lead">画像に「文字を載せるための下地」を付けるだけのツールです。下帯などのプリセットを選ぶだけ。縦画像を16:9に収める両脇ぼかしもできます。文字入れは、もじPNGメーカーなどお好みの道具でどうぞ。</p>
+
+  <div class="card">
+    <h2>1. 画像を開く</h2>
+    <div class="drop" id="drop">
+      <b>タップして画像を選ぶ</b><br>
+      （PCではドラッグ＆ドロップでも開けます）
+    </div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;">
+    <div class="msg" id="fileMsg"></div>
+  </div>
+
+  <div class="card" id="modeCard" style="display:none;">
+    <h2>2. やりたいこと</h2>
+    <div class="seg" id="modeSeg">
+      <button data-mode="underlay" class="on">文字の下地</button>
+      <button data-mode="frame">16:9・両脇ぼかし</button>
+    </div>
+  </div>
+
+  <div class="card" id="presetCard" style="display:none;">
+    <h2>3. プリセット（選ぶだけ）</h2>
+    <div class="seg" id="presetSeg">
+      <button data-preset="none">なし</button>
+      <button data-preset="bottom" class="on">下帯・標準</button>
+      <button data-preset="bottomStrong">下帯・強め</button>
+      <button data-preset="top">上帯</button>
+      <button data-preset="full">全体を少し暗く</button>
+      <button data-preset="vignette">周りを少し暗く</button>
+    </div>
+    <div class="row" style="margin-top:14px;">
+      <label for="alphaRange">濃さの微調整</label>
+      <input type="range" id="alphaRange" min="50" max="150" value="100">
+      <span class="val" id="alphaVal">100%</span>
+    </div>
+  </div>
+
+  <div class="card" id="frameCard" style="display:none;">
+    <h2>3. 枠に収める</h2>
+    <p class="lead" style="margin:0;">画像を16:9の真ん中に置き、余った両脇（縦画像のとき）や上下（横長すぎる画像のとき）を、画像自体をぼかして伸ばした背景で埋めます。設定は不要です。</p>
+  </div>
+
+  <div class="card" id="outCard" style="display:none;">
+    <h2>4. プレビューと保存</h2>
+    <div class="prevbox"><canvas id="cv"></canvas></div>
+    <div class="row" style="margin-top:12px;">
+      <button id="savePng" class="primary" style="flex:1;">PNGで保存</button>
+      <button id="saveJpg" style="flex:1;">JPEGで保存</button>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="prevbox" id="resultBox" style="display:none; margin-top:10px;">
+      <div class="foot" style="margin-bottom:8px;">保存用画像（スマホでは長押しでも保存できます）</div>
+      <img id="resultImg" alt="保存用画像">
+    </div>
+  </div>
+
+  <div class="card foot">
+    <b>使い方・注意</b><br>
+    ・下地のプリセットは「下帯・標準」が文字置き場の定番です。明るい画像で文字が埋もれそうなら「下帯・強め」を。真ん中を引き締めたいときは「周りを少し暗く」もどうぞ。<br>
+    ・両脇ぼかしは、ぼかした背景を少し暗くしてあるので、そのまま文字も載せやすいです。<br>
+    ・画像はブラウザの中でだけ処理され、外部に送信されることはありません。ネット接続も不要です。<br>
+    ・とても大きい画像は、スマホでは処理に時間がかかったり、保存に失敗したりすることがあります。その場合はPCで試してください。
+  </div>
+
+  <p class="foot"><a href="../../index.html" style="color:var(--sub);">← カラの道具箱へ戻る</a>　／　<a href="../../LICENSE" style="color:var(--sub);">MIT License</a></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+
+  var img = null;          // 読み込んだ画像（HTMLImageElement）
+  var mode = "underlay";   // underlay | frame
+  var preset = "bottom";   // none | bottom | bottomStrong | top | full
+  var resultUrl = null;
+
+  var PRESETS = {
+    none:         null,
+    bottom:       { kind: "band", pos: "bottom", height: 0.38, alpha: 0.62 },
+    bottomStrong: { kind: "band", pos: "bottom", height: 0.55, alpha: 0.85 },
+    top:          { kind: "band", pos: "top",    height: 0.30, alpha: 0.62 },
+    full:         { kind: "full", alpha: 0.32 },
+    vignette:     { kind: "vignette", alpha: 0.50 }
+  };
+
+  function show(id, on){ $(id).style.display = on ? "block" : "none"; }
+
+  function loadFile(file){
+    if (!file) return;
+    if (file.type && file.type.indexOf("image/") !== 0){
+      $("fileMsg").textContent = "画像ファイルを選んでください";
+      return;
+    }
+    var url = URL.createObjectURL(file);
+    var im = new Image();
+    im.onload = function(){
+      img = im;
+      var mp = (im.naturalWidth * im.naturalHeight / 1000000).toFixed(1);
+      $("fileMsg").textContent = file.name + "（" + im.naturalWidth + "×" + im.naturalHeight + "px）";
+      if (im.naturalWidth * im.naturalHeight > 20000000){
+        $("fileMsg").textContent += " 大きい画像です。スマホでは処理に時間がかかることがあります。";
+      }
+      show("modeCard", true);
+      applyModeVisibility();
+      show("outCard", true);
+      render();
+    };
+    im.onerror = function(){
+      $("fileMsg").textContent = "画像を読み込めませんでした";
+    };
+    im.src = url;
+  }
+
+  function applyModeVisibility(){
+    show("presetCard", mode === "underlay");
+    show("frameCard", mode === "frame");
+  }
+
+  function alphaScale(){
+    return parseInt($("alphaRange").value, 10) / 100;
+  }
+
+  function drawUnderlay(ctx, W, H){
+    var p = PRESETS[preset];
+    if (!p) return;
+    var s = alphaScale();
+    if (p.kind === "full"){
+      ctx.fillStyle = "rgba(0,0,0," + Math.min(1, p.alpha * s).toFixed(3) + ")";
+      ctx.fillRect(0, 0, W, H);
+      return;
+    }
+    if (p.kind === "vignette"){
+      var cx = W / 2, cy = H / 2;
+      var r0 = Math.min(W, H) * 0.42;
+      var r1 = Math.sqrt(cx * cx + cy * cy);
+      var vg = ctx.createRadialGradient(cx, cy, r0, cx, cy, r1);
+      vg.addColorStop(0, "rgba(0,0,0,0)");
+      vg.addColorStop(1, "rgba(0,0,0," + Math.min(1, p.alpha * s).toFixed(3) + ")");
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
+      return;
+    }
+    var bh = Math.round(H * p.height);
+    var a = Math.min(1, p.alpha * s).toFixed(3);
+    var g, y0;
+    if (p.pos === "bottom"){
+      y0 = H - bh;
+      g = ctx.createLinearGradient(0, y0, 0, H);
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(1, "rgba(0,0,0," + a + ")");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, y0, W, bh);
+    } else {
+      g = ctx.createLinearGradient(0, 0, 0, bh);
+      g.addColorStop(0, "rgba(0,0,0," + a + ")");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, bh);
+    }
+  }
+
+  // ctx.filter に頼らないぼかし: 小さく描いてから大きく戻す
+  function drawBlurredCover(ctx, W, H){
+    var iw = img.naturalWidth, ih = img.naturalHeight;
+    var scale = Math.max(W / iw, H / ih);
+    var dw = Math.ceil(iw * scale), dh = Math.ceil(ih * scale);
+    var dx = Math.round((W - dw) / 2), dy = Math.round((H - dh) / 2);
+    var steps = 24; // 縮小率の目安（小さいほど強くぼける）
+    var sw = Math.max(2, Math.round(dw / steps));
+    var sh = Math.max(2, Math.round(dh / steps));
+    var small = document.createElement("canvas");
+    small.width = sw; small.height = sh;
+    var sctx = small.getContext("2d");
+    sctx.drawImage(img, 0, 0, sw, sh);
+    // 2回往復させると滑らかになる
+    var mid = document.createElement("canvas");
+    mid.width = dw; mid.height = dh;
+    var mctx = mid.getContext("2d");
+    mctx.imageSmoothingEnabled = true;
+    mctx.drawImage(small, 0, 0, dw, dh);
+    var small2 = document.createElement("canvas");
+    small2.width = sw; small2.height = sh;
+    small2.getContext("2d").drawImage(mid, 0, 0, sw, sh);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(small2, 0, 0, sw, sh, dx, dy, dw, dh);
+  }
+
+  function render(){
+    if (!img) return;
+    var cv = $("cv");
+    var ctx = cv.getContext("2d");
+    var iw = img.naturalWidth, ih = img.naturalHeight;
+    if (mode === "underlay"){
+      cv.width = iw; cv.height = ih;
+      ctx.drawImage(img, 0, 0);
+      drawUnderlay(ctx, iw, ih);
+    } else {
+      // 16:9 の箱に、画像を等倍のまま真ん中に置く
+      var W, H;
+      if (iw / ih > 16 / 9){ W = iw; H = Math.round(iw * 9 / 16); }
+      else { H = ih; W = Math.round(ih * 16 / 9); }
+      cv.width = W; cv.height = H;
+      drawBlurredCover(ctx, W, H);
+      // 背景を少し暗くする（濃さスライダーで調整可）
+      ctx.fillStyle = "rgba(0,0,0," + (0.12 * alphaScale()).toFixed(3) + ")";
+      ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(img, Math.round((W - iw) / 2), Math.round((H - ih) / 2));
+    }
+    $("msg").textContent = "出力サイズ: " + cv.width + "×" + cv.height + "px";
+    $("resultBox").style.display = "none";
+  }
+
+  function save(asJpeg){
+    var cv = $("cv");
+    if (!img || !cv.width) return;
+    var type = asJpeg ? "image/jpeg" : "image/png";
+    var name = asJpeg ? "shimoji.jpg" : "shimoji.png";
+    cv.toBlob(function(blob){
+      if (!blob){
+        $("msg").textContent = "保存に失敗しました。画像が大きすぎる場合はPCで試してください。";
+        return;
+      }
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+      resultUrl = URL.createObjectURL(blob);
+      $("resultImg").src = resultUrl;
+      $("resultBox").style.display = "block";
+      var a = document.createElement("a");
+      a.href = resultUrl;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      $("msg").textContent = name + " を保存しました（出力サイズ: " + cv.width + "×" + cv.height + "px）";
+    }, type, 0.92);
+  }
+
+  // ---- イベント ----
+  $("drop").addEventListener("click", function(){ $("fileInput").click(); });
+  $("fileInput").addEventListener("change", function(){
+    loadFile($("fileInput").files[0]);
+  });
+  ["dragover", "dragleave", "drop"].forEach(function(ev){
+    $("drop").addEventListener(ev, function(e){ e.preventDefault(); });
+  });
+  $("drop").addEventListener("drop", function(e){
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    loadFile(f);
+  });
+
+  function segWire(segId, attr, fn){
+    Array.prototype.forEach.call($(segId).querySelectorAll("button"), function(btn){
+      btn.addEventListener("click", function(){
+        Array.prototype.forEach.call($(segId).querySelectorAll("button"), function(b){
+          b.classList.toggle("on", b === btn);
+        });
+        fn(btn.getAttribute(attr));
+      });
+    });
+  }
+  segWire("modeSeg", "data-mode", function(v){
+    mode = v;
+    applyModeVisibility();
+    render();
+  });
+  segWire("presetSeg", "data-preset", function(v){
+    preset = v;
+    render();
+  });
+  $("alphaRange").addEventListener("input", function(){
+    $("alphaVal").textContent = $("alphaRange").value + "%";
+    render();
+  });
+  $("savePng").addEventListener("click", function(){ save(false); });
+  $("saveJpg").addEventListener("click", function(){ save(true); });
+})();
+</script>
+</body>
+</html>
