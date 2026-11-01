@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参加枠まわし君（仮）— 参加型配信の順番管理</title>
+<style>
+  :root{
+    --bg:#171a21; --panel:#21252f; --panel2:#282d3a; --line:#3a4152;
+    --text:#eef1f6; --sub:#9aa5b5; --accent:#ffd34d; --accent-text:#231a00;
+    --btn:#39415a; --btn-text:#eef1f6; --danger:#8a3a44;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--text);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;}
+  .wrap{max-width:720px; margin:0 auto; padding:16px 14px 40px;}
+  h1{font-size:20px; margin:6px 0 2px;}
+  .lead{color:var(--sub); font-size:13px; margin:0 0 14px;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px;}
+  .card h2{font-size:14px; margin:0 0 10px; color:var(--sub); font-weight:600; letter-spacing:.05em;}
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  input[type="text"]{flex:1; min-width:140px; font-size:17px; padding:12px;
+    border-radius:10px; border:1px solid var(--line); background:var(--panel2); color:var(--text);}
+  input[type="number"]{width:76px; font-size:17px; padding:10px;
+    border-radius:10px; border:1px solid var(--line); background:var(--panel2); color:var(--text);}
+  select{font-size:15px; padding:10px; border-radius:10px; border:1px solid var(--line);
+    background:var(--panel2); color:var(--text);}
+  button{font-size:16px; padding:12px 16px; border-radius:10px; border:1px solid var(--line);
+    background:var(--btn); color:var(--btn-text); cursor:pointer;}
+  button:active{transform:scale(.97);}
+  button.primary{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  button.small{padding:8px 12px; font-size:14px;}
+  button.danger{background:var(--danger); border-color:var(--danger);}
+  label{font-size:14px; color:var(--sub);}
+  .nextbox{background:linear-gradient(180deg,#2b3040,#232836); border:1px solid var(--accent);
+    border-radius:12px; padding:14px; margin-bottom:14px;}
+  .nextbox h2{font-size:14px; margin:0 0 8px; color:var(--accent);}
+  .nextnames{font-size:22px; font-weight:700; line-height:1.4; word-break:break-all;}
+  .nextempty{color:var(--sub); font-size:15px;}
+  ul.list{list-style:none; margin:0; padding:0;}
+  li.person{display:flex; align-items:center; gap:8px; padding:10px;
+    background:var(--panel2); border:1px solid var(--line); border-radius:10px; margin-bottom:8px;}
+  li.person.next{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), 0 0 14px rgba(255,211,77,.35);
+    background:#33301f;}
+  .seq{color:var(--sub); font-size:13px; width:24px; text-align:right; flex:none;}
+  .name{flex:1; font-size:18px; font-weight:600; word-break:break-all;}
+  .badge{flex:none; font-size:13px; background:#11141b; border:1px solid var(--line);
+    border-radius:999px; padding:4px 10px; color:var(--accent);}
+  .pbtn{flex:none; width:48px; height:48px; font-size:22px; padding:0; border-radius:12px;}
+  .del{flex:none; width:40px; height:48px; padding:0; font-size:16px; color:var(--sub);}
+  .empty{color:var(--sub); text-align:center; padding:18px 0; font-size:14px;}
+  .msg{min-height:20px; font-size:13px; color:var(--accent); margin-top:8px;}
+  .foot{color:var(--sub); font-size:12px; line-height:1.7;}
+  .foot b{color:var(--text);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎮 参加枠まわし君（仮）</h1>
+  <p class="lead">参加型配信の「次は誰？」をなくす裏方ツール。参加回数が一番少ない人から順に、次の枠が光ります。</p>
+
+  <div class="nextbox">
+    <h2>⭐ 次の参加者</h2>
+    <div id="nextNames" class="nextempty">まだ参加者がいません</div>
+    <div class="row" style="margin-top:12px;">
+      <button id="confirmBtn" class="primary" style="flex:1;">この枠で参加した（全員 +1）</button>
+    </div>
+    <p class="foot" style="margin:8px 0 0;">1ゲーム終わったらこれを押すだけ。光が次の人たちへ移ります。</p>
+  </div>
+
+  <div class="card">
+    <h2>参加者を追加</h2>
+    <div class="row">
+      <input type="text" id="nameInput" placeholder="名前を入力（Enterで追加）" autocomplete="off">
+      <button id="addBtn" class="primary">追加</button>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <input type="text" id="bulkInput" placeholder="まとめて追加（カンマ / 改行区切り）" autocomplete="off">
+      <button id="bulkBtn">一括追加</button>
+    </div>
+    <div id="msg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>設定</h2>
+    <div class="row">
+      <label for="frameSize">参加枠</label>
+      <input type="number" id="frameSize" value="3" min="1" max="20">
+      <label>人</label>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <label for="joinPolicy">途中参加の初期値</label>
+      <select id="joinPolicy">
+        <option value="zero">0（初見さんが追いつくまで連続参加）</option>
+        <option value="minminus" selected>リストの最小値−1（初見さん優先）</option>
+        <option value="min">リストの最小値（低回数グループ入り）</option>
+        <option value="avg">リストの平均値（平等）</option>
+        <option value="max">リストの最大値（待ってた人優先）</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>参加者リスト（到着順）</h2>
+    <ul id="list" class="list"></ul>
+    <div id="emptyNote" class="empty">参加者はまだいません</div>
+    <div class="row" style="margin-top:6px;">
+      <button id="resetCounts" class="small">回数を全員0に</button>
+      <button id="clearAll" class="small danger">全員削除</button>
+    </div>
+  </div>
+
+  <div class="card foot">
+    <b>使い方</b><br>
+    ・名前を追加すると、参加回数が一番少ない人から枠の人数だけ光ります（同点なら先に来た人から）。<br>
+    ・一時離脱（トイレ・お風呂など）はその人の <b>+</b> を押すと光が消えて次の人へ。戻ってきたら <b>−</b> で復帰します。並び順は変わりません。<br>
+    ・表示は到着順のまま固定です。リストが勝手にシャッフルされることはありません。<br>
+    ・データは保存されません。ページを閉じたり再読み込みするとリセットされます（無料版の仕様です）。
+  </div>
+
+  <p class="foot"><a href="../../index.html" style="color:var(--sub);">← カラの道具箱へ戻る</a></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var people = [];        // {name, count, seq}
+  var nextSeq = 1;
+
+  var $ = function(id){ return document.getElementById(id); };
+  var listEl = $("list"), nextEl = $("nextNames"), msgEl = $("msg");
+
+  function showMsg(t){ msgEl.textContent = t || ""; }
+
+  function frameSize(){
+    var n = parseInt($("frameSize").value, 10);
+    if (isNaN(n) || n < 1) n = 1;
+    if (n > 20) n = 20;
+    return n;
+  }
+
+  function initialCount(){
+    if (people.length === 0) return 0;
+    var counts = people.map(function(p){ return p.count; });
+    var policy = $("joinPolicy").value;
+    if (policy === "zero") return 0;
+    if (policy === "minminus") return Math.max(Math.min.apply(null, counts) - 1, 0);
+    if (policy === "min") return Math.min.apply(null, counts);
+    if (policy === "max") return Math.max.apply(null, counts);
+    // avg
+    var sum = counts.reduce(function(a,b){ return a+b; }, 0);
+    return Math.round(sum / counts.length);
+  }
+
+  // 次の枠に入る人たち（count昇順 → seq昇順 の先頭N人）
+  function nextSet(){
+    var sorted = people.slice().sort(function(a,b){
+      return (a.count - b.count) || (a.seq - b.seq);
+    });
+    var set = {};
+    sorted.slice(0, frameSize()).forEach(function(p){ set[p.seq] = true; });
+    return set;
+  }
+
+  function render(){
+    var set = nextSet();
+    listEl.innerHTML = "";
+    people.forEach(function(p){
+      var li = document.createElement("li");
+      li.className = "person" + (set[p.seq] ? " next" : "");
+
+      var seq = document.createElement("span");
+      seq.className = "seq"; seq.textContent = p.seq + ".";
+      li.appendChild(seq);
+
+      var name = document.createElement("span");
+      name.className = "name"; name.textContent = p.name;
+      li.appendChild(name);
+
+      var badge = document.createElement("span");
+      badge.className = "badge"; badge.textContent = p.count + "回";
+      li.appendChild(badge);
+
+      var plus = document.createElement("button");
+      plus.className = "pbtn"; plus.textContent = "+";
+      plus.title = "回数+1（離席パスにも）";
+      plus.addEventListener("click", function(){ p.count++; render(); });
+      li.appendChild(plus);
+
+      var minus = document.createElement("button");
+      minus.className = "pbtn"; minus.textContent = "−";
+      minus.title = "回数-1（復帰）";
+      minus.addEventListener("click", function(){ if (p.count > 0) p.count--; render(); });
+      li.appendChild(minus);
+
+      var del = document.createElement("button");
+      del.className = "del"; del.textContent = "✕";
+      del.title = "削除";
+      del.addEventListener("click", function(){
+        people = people.filter(function(q){ return q.seq !== p.seq; });
+        render();
+      });
+      li.appendChild(del);
+
+      listEl.appendChild(li);
+    });
+
+    $("emptyNote").style.display = people.length ? "none" : "block";
+
+    if (people.length === 0){
+      nextEl.className = "nextempty";
+      nextEl.textContent = "まだ参加者がいません";
+    } else {
+      // 次の参加者は「優先順（回数が少ない→先に来た）」で表示する
+      var names = people.slice().sort(function(a,b){
+        return (a.count - b.count) || (a.seq - b.seq);
+      }).slice(0, frameSize()).map(function(p){ return p.name; });
+      nextEl.className = "nextnames";
+      nextEl.textContent = names.join(" ／ ");
+    }
+  }
+
+  function addName(raw){
+    var name = (raw || "").trim();
+    if (!name) return false;
+    var exists = people.some(function(p){ return p.name === name; });
+    if (exists){ showMsg("「" + name + "」は既にリストにいます"); return false; }
+    people.push({ name: name, count: initialCount(), seq: nextSeq++ });
+    showMsg("");
+    return true;
+  }
+
+  function addFromInput(){
+    if (addName($("nameInput").value)){ $("nameInput").value = ""; }
+    $("nameInput").focus();
+    render();
+  }
+
+  $("addBtn").addEventListener("click", addFromInput);
+  $("nameInput").addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ e.preventDefault(); addFromInput(); }
+  });
+
+  $("bulkBtn").addEventListener("click", function(){
+    var parts = $("bulkInput").value.split(/[\n,、，]+/);
+    var added = 0;
+    parts.forEach(function(s){ if (addName(s)) added++; });
+    if (added > 0){ $("bulkInput").value = ""; showMsg(added + "人を追加しました"); }
+    render();
+  });
+  $("bulkInput").addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ e.preventDefault(); $("bulkBtn").click(); }
+  });
+
+  $("confirmBtn").addEventListener("click", function(){
+    var set = nextSet();
+    people.forEach(function(p){ if (set[p.seq]) p.count++; });
+    render();
+  });
+
+  $("frameSize").addEventListener("change", render);
+  $("frameSize").addEventListener("input", render);
+  $("joinPolicy").addEventListener("change", function(){ showMsg(""); });
+
+  $("resetCounts").addEventListener("click", function(){
+    if (!people.length) return;
+    if (confirm("全員の参加回数を0に戻しますか？")){
+      people.forEach(function(p){ p.count = 0; });
+      render();
+    }
+  });
+
+  $("clearAll").addEventListener("click", function(){
+    if (!people.length) return;
+    if (confirm("参加者を全員削除しますか？")){
+      people = []; nextSeq = 1; render();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

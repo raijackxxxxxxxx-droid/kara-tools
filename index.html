@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>カラの道具箱 — Kara Software Works</title>
+<style>
+  :root{
+    --bg:#171a21; --panel:#21252f; --panel2:#282d3a; --line:#3a4152;
+    --text:#eef1f6; --sub:#9aa5b5; --accent:#ffd34d;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--text);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;}
+  .wrap{max-width:720px; margin:0 auto; padding:24px 14px 48px;}
+  h1{font-size:24px; margin:0 0 4px;}
+  .lead{color:var(--sub); font-size:14px; line-height:1.7; margin:0 0 20px;}
+  a.tool{display:block; text-decoration:none; color:var(--text);
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:16px; margin-bottom:12px;}
+  a.tool:hover{border-color:var(--accent);}
+  .tname{font-size:19px; font-weight:700; margin-bottom:4px;}
+  .tdesc{color:var(--sub); font-size:14px; line-height:1.6;}
+  .tag{display:inline-block; font-size:12px; color:var(--accent);
+    border:1px solid var(--accent); border-radius:999px; padding:1px 8px; margin-left:8px; vertical-align:middle;}
+  .foot{color:var(--sub); font-size:12px; line-height:1.8; margin-top:24px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧰 カラの道具箱</h1>
+  <p class="lead">Kara Software Works の小物ツール置き場です。どれもブラウザで開くだけで使える無料ツールで、データは外部に送信されません。自分が欲しくて作ったものを、ついでに公開しています。</p>
+
+  <a class="tool" href="tools/participation-queue/index.html">
+    <div class="tname">🎮 参加枠まわし君（仮）<span class="tag">配信向け</span></div>
+    <div class="tdesc">参加型配信の「次は誰？」をなくす裏方ツール。参加回数が一番少ない人から順に、次の参加者が光ります。離席パスや途中参加の扱いもボタンひとつ。</div>
+  </a>
+
+  <p class="foot">
+    動作保証はありませんが、気が向いたら直します。<br>
+    ライセンス: MIT License（LICENSE ファイル参照）。<br>
+    © 2026 Kara Software Works
+  </p>
+</div>
+</body>
+</html>
