@@ -292,7 +292,6 @@
     });
   }
   function scheduleRegen(){
-    if ($("outBox").style.display === "none") return;
     clearTimeout(timer);
     timer = setTimeout(generate, 350);
   }
