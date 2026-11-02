@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>サムネ合成君（仮）— 画像を置いて焼き込むだけのサムネ台</title>
+<style>
+  :root{
+    --bg:#171a21; --panel:#21252f; --panel2:#282d3a; --line:#3a4152;
+    --text:#eef1f6; --sub:#9aa5b5; --accent:#ffd34d; --accent-text:#231a00;
+    --btn:#39415a; --btn-text:#eef1f6;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--text);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;}
+  .wrap{max-width:720px; margin:0 auto; padding:16px 14px 40px;}
+  h1{font-size:20px; margin:6px 0 2px;}
+  .lead{color:var(--sub); font-size:13px; margin:0 0 14px; line-height:1.6;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px;}
+  .card h2{font-size:14px; margin:0 0 10px; color:var(--sub); font-weight:600; letter-spacing:.05em;}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
+  .row:last-child{margin-bottom:0;}
+  button{font-size:16px; padding:12px 16px; border-radius:10px; border:1px solid var(--line);
+    background:var(--btn); color:var(--btn-text); cursor:pointer;}
+  button:active{transform:scale(.97);}
+  button.primary{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  button:disabled{opacity:.45; cursor:default;}
+  button.on{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  label{font-size:14px; color:var(--sub);}
+  input[type="number"]{width:84px; font-size:16px; padding:9px 10px; border-radius:8px;
+    border:1px solid var(--line); background:var(--panel2); color:var(--text);}
+  .seg{display:flex; gap:8px; flex-wrap:wrap;}
+  .seg button{font-size:14px; padding:9px 14px; border-radius:999px;}
+  .seg button.on{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  .drop{border:2px dashed var(--line); border-radius:12px; padding:22px 12px; text-align:center;
+    color:var(--sub); font-size:14px; line-height:1.7; cursor:pointer;}
+  .drop b{color:var(--text); font-size:16px;}
+  .prevbox{border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--panel2);
+    text-align:center;}
+  .prevbox canvas{max-width:100%; height:auto; display:block; margin:0 auto;}
+  .prevbox img{max-width:100%; height:auto;}
+  .sticky{position:sticky; top:8px; z-index:10; box-shadow:0 6px 18px rgba(0,0,0,.35);}
+  .pad{display:grid; grid-template-columns:repeat(3,58px); gap:8px;}
+  .pad button{height:52px; font-size:20px; padding:0;}
+  .pad .hole{visibility:hidden;}
+  .pad .holetxt{display:flex; align-items:center; justify-content:center; color:var(--sub); font-size:13px;}
+  .msg{min-height:20px; font-size:13px; color:var(--accent); margin-top:8px;}
+  .info{font-size:13px; color:var(--sub); margin-top:8px; min-height:18px;}
+  .foot{color:var(--sub); font-size:12px; line-height:1.7;}
+  .foot b{color:var(--text);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧩 サムネ合成君（仮）</h1>
+  <p class="lead">画像を1枚ずつ置いて、「合成」で1枚に焼き込むだけのサムネ台です。台紙は1280×720固定。ドラッグはなし、ボタンだけで位置と大きさを決めます。レイヤーは持たない代わりに、置いて・焼いて・次、が速い作りです。</p>
+
+  <div class="card sticky">
+    <h2>プレビュー（点線の枠は仮置き中の範囲で、保存には入りません）</h2>
+    <div class="prevbox"><canvas id="cv" width="1280" height="720"></canvas></div>
+    <div class="info" id="baseInfo">焼き込み済み: 0枚</div>
+  </div>
+
+  <div class="card">
+    <h2>台紙の色（切り替えると最初からやり直し）</h2>
+    <div class="seg" id="bgSeg">
+      <button data-bg="black" class="on">黒</button>
+      <button data-bg="white">白</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1. 画像を置く</h2>
+    <div class="drop" id="drop">
+      <b>タップして画像を選ぶ</b><br>
+      （PCではドラッグ＆ドロップでも開けます）
+    </div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;">
+    <div class="msg" id="fileMsg"></div>
+  </div>
+
+  <div class="card" id="adjustCard" style="display:none;">
+    <h2>2. 仮置きの調整</h2>
+    <div class="info" id="tempInfo" style="margin:0 0 10px;"></div>
+
+    <label>大きさ</label>
+    <div class="seg" id="sizeSeg" style="margin:6px 0 10px;">
+      <button data-size="cover">全面</button>
+      <button data-size="contain" class="on">収める</button>
+      <button data-size="100">100%</button>
+      <button data-size="75">75%</button>
+      <button data-size="50">50%</button>
+      <button data-size="33">33%</button>
+      <button data-size="25">25%</button>
+    </div>
+    <div class="row">
+      <div class="seg" id="basisSeg">
+        <button data-basis="height" class="on">高さ基準</button>
+        <button data-basis="width">幅基準</button>
+      </div>
+      <button id="pctDown">−5%</button>
+      <button id="pctUp">＋5%</button>
+      <input type="number" id="sizeIn" min="5" max="400" step="1" aria-label="大きさ（%）">
+      <label for="sizeIn">%</label>
+    </div>
+
+    <label>置き場所（一発で移動）</label>
+    <div class="pad" id="posPad" style="margin:6px 0 14px;">
+      <button data-x="l" data-y="t">↖</button>
+      <button data-x="c" data-y="t">↑</button>
+      <button data-x="r" data-y="t">↗</button>
+      <button data-x="l" data-y="c">←</button>
+      <button data-x="c" data-y="c">◎</button>
+      <button data-x="r" data-y="c">→</button>
+      <button data-x="l" data-y="b">↙</button>
+      <button data-x="c" data-y="b">↓</button>
+      <button data-x="r" data-y="b">↘</button>
+    </div>
+
+    <label>微調整（少しずらす）</label>
+    <div class="row" style="margin-top:6px;">
+      <div class="seg" id="stepSeg">
+        <button data-step="1">1px</button>
+        <button data-step="10" class="on">10px</button>
+        <button data-step="50">50px</button>
+      </div>
+    </div>
+    <div class="pad" id="movePad">
+      <span class="hole"></span>
+      <button data-dx="0" data-dy="-1">↑</button>
+      <span class="hole"></span>
+      <button data-dx="-1" data-dy="0">←</button>
+      <span class="holetxt" id="stepDisp">10</span>
+      <button data-dx="1" data-dy="0">→</button>
+      <span class="hole"></span>
+      <button data-dx="0" data-dy="1">↓</button>
+      <span class="hole"></span>
+    </div>
+
+    <div class="row" style="margin-top:14px;">
+      <button id="flipBtn">左右反転</button>
+      <label for="xIn">x</label>
+      <input type="number" id="xIn" step="1">
+      <label for="yIn">y</label>
+      <input type="number" id="yIn" step="1">
+    </div>
+  </div>
+
+  <div class="card" id="bakeCard" style="display:none;">
+    <h2>3. 合成する</h2>
+    <div class="row">
+      <button id="bakeBtn" class="primary" style="flex:1;">この位置で合成（焼き込む）</button>
+    </div>
+    <div class="row">
+      <button id="discardBtn" style="flex:1;">仮置きをやめる</button>
+      <button id="undoBtn" style="flex:1;" disabled>1つ戻す</button>
+    </div>
+    <div class="msg" id="bakeMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>4. 保存する</h2>
+    <div class="row">
+      <button id="savePng" class="primary" style="flex:1;">PNGで保存</button>
+      <button id="saveJpg" style="flex:1;">JPEGで保存</button>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="prevbox" id="resultBox" style="display:none; margin-top:10px;">
+      <div class="foot" style="margin-bottom:8px;">保存用画像（スマホでは長押しでも保存できます）</div>
+      <img id="resultImg" alt="保存用画像">
+    </div>
+  </div>
+
+  <div class="card foot">
+    <b>使い方・注意</b><br>
+    ・流れは「画像を置く → 大きさと置き場所を決める → 合成」の繰り返しです。合成した画像は、あとから個別に動かしたり消したりはできません。間違えたら「1つ戻す」で直前の合成だけ取り消せます。<br>
+    ・最初の1枚を背景にしたいときは、大きさ「全面」を選んで合成してください。全体を見せたい画像は「収める」が安全です。<br>
+    ・端の置き場所（↖など）は、台紙の端から少し内側に置くようになっています。端まで寄せたいときは微調整でずらしてください。置き場所をパッドで決めたあとに大きさを変えても、その端・角は動きません（微調整でずらしたあとは、中心を保って拡縮します）。<br>
+    ・文字画像は、もじPNGメーカーで作った透過PNGを置くと相性がいいです。<br>
+    ・仮置き中の画像がある間は保存できません。合成するか、仮置きをやめてから保存してください。<br>
+    ・画像はブラウザの中でだけ処理され、外部に送信されることはありません。ネット接続も不要です。
+  </div>
+
+  <p class="foot"><a href="../../index.html" style="color:var(--sub);">← カラの道具箱へ戻る</a>　／　<a href="../../LICENSE" style="color:var(--sub);">MIT License</a></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+
+  var W = 1280, H = 720;
+  var base = document.createElement("canvas");
+  base.width = W; base.height = H;
+  var bctx = base.getContext("2d");
+
+  var bg = "black";        // black | white
+  var snapshot = null;     // 合成直前の台紙（1つ戻す用）
+  var bakeCount = 0;
+  var temp = null;         // {img, name, sizeMode, pct, basis, x, y, flip, ax, ay}（ax/ay: 配置アンカー、nullは自由配置）
+  var step = 10;
+  var resultUrl = null;
+
+  function show(id, on){ $(id).style.display = on ? "block" : "none"; }
+
+  function fillBase(){
+    bctx.fillStyle = bg === "black" ? "#000000" : "#ffffff";
+    bctx.fillRect(0, 0, W, H);
+  }
+  fillBase();
+
+  function tempSize(){
+    var iw = temp.img.naturalWidth, ih = temp.img.naturalHeight;
+    var s, w, h;
+    if (temp.sizeMode === "cover"){
+      s = Math.max(W / iw, H / ih);
+      w = Math.round(iw * s); h = Math.round(ih * s);
+    } else if (temp.sizeMode === "contain"){
+      s = Math.min(W / iw, H / ih);
+      w = Math.round(iw * s); h = Math.round(ih * s);
+    } else if (temp.basis === "height"){
+      h = Math.round(H * temp.pct / 100);
+      w = Math.round(h * iw / ih);
+    } else {
+      w = Math.round(W * temp.pct / 100);
+      h = Math.round(w * ih / iw);
+    }
+    return { w: Math.max(1, w), h: Math.max(1, h) };
+  }
+
+  var MX = Math.round(W * 0.03), MY = Math.round(H * 0.03);
+
+  // 配置パッドで決めた端・角（アンカー）から、画像の大きさに合わせて座標を出す。
+  // 画像が幅（高さ）いっぱいのときは余白を付けない。付けると逆向きに食い込んでしまうため。
+  function anchorPos(w, h){
+    var mx = (w + MX * 2 <= W) ? MX : 0;
+    var my = (h + MY * 2 <= H) ? MY : 0;
+    var x = temp.ax === 0 ? mx : temp.ax === 1 ? W - w - mx : (W - w) / 2;
+    var y = temp.ay === 0 ? my : temp.ay === 1 ? H - h - my : (H - h) / 2;
+    return { x: x, y: y };
+  }
+
+  function drawTempTo(ctx){
+    var sz = tempSize();
+    var x = Math.round(temp.x), y = Math.round(temp.y);
+    ctx.save();
+    if (temp.flip){
+      ctx.translate(x + sz.w, y);
+      ctx.scale(-1, 1);
+      ctx.drawImage(temp.img, 0, 0, sz.w, sz.h);
+    } else {
+      ctx.drawImage(temp.img, x, y, sz.w, sz.h);
+    }
+    ctx.restore();
+    return sz;
+  }
+
+  function render(){
+    var cv = $("cv");
+    var ctx = cv.getContext("2d");
+    ctx.drawImage(base, 0, 0);
+    if (temp){
+      var sz = drawTempTo(ctx);
+      // 仮置き中だけ見える点線の枠（保存には入らない）
+      ctx.save();
+      ctx.setLineDash([12, 9]);
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = "rgba(0,0,0,0.85)";
+      ctx.strokeRect(Math.round(temp.x), Math.round(temp.y), sz.w, sz.h);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "#ffd34d";
+      ctx.strokeRect(Math.round(temp.x), Math.round(temp.y), sz.w, sz.h);
+      ctx.restore();
+      $("tempInfo").textContent = temp.name + "：" + sz.w + "×" + sz.h + "px（位置 x=" +
+        Math.round(temp.x) + ", y=" + Math.round(temp.y) + "）";
+      if (document.activeElement !== $("xIn")) $("xIn").value = Math.round(temp.x);
+      if (document.activeElement !== $("yIn")) $("yIn").value = Math.round(temp.y);
+      if (document.activeElement !== $("sizeIn")){
+        $("sizeIn").value = temp.sizeMode === "pct" ? temp.pct : "";
+        $("sizeIn").placeholder = temp.sizeMode === "cover" ? "全面" : "収める";
+      }
+      $("flipBtn").classList.toggle("on", temp.flip);
+    }
+    $("baseInfo").textContent = "焼き込み済み: " + bakeCount + "枚" + (temp ? "／仮置き中: 1枚" : "");
+    $("bakeBtn").disabled = !temp;
+    $("discardBtn").disabled = !temp;
+    $("undoBtn").disabled = !snapshot;
+  }
+
+  function setSize(mode, pct){
+    if (!temp) return;
+    var old = tempSize();
+    var cx = temp.x + old.w / 2, cy = temp.y + old.h / 2;
+    temp.sizeMode = mode;
+    if (pct != null) temp.pct = pct;
+    var nw = tempSize();
+    if (temp.ax !== null && temp.ay !== null){
+      // 配置パッドで置いた後は、その端・角を固定したまま拡縮する
+      var p = anchorPos(nw.w, nw.h);
+      temp.x = p.x;
+      temp.y = p.y;
+    } else {
+      // 微調整で動かした後は、中心を保って拡縮する
+      temp.x = cx - nw.w / 2;
+      temp.y = cy - nw.h / 2;
+    }
+    render();
+  }
+
+  function bumpPct(d){
+    if (!temp) return;
+    if (temp.sizeMode !== "pct"){
+      var sz = tempSize();
+      temp.pct = temp.basis === "height"
+        ? Math.round(sz.h / H * 100)
+        : Math.round(sz.w / W * 100);
+    }
+    var p = Math.min(400, Math.max(5, temp.pct + d));
+    clearSeg("sizeSeg");
+    setSize("pct", p);
+  }
+
+  function applyPos(px, py){
+    if (!temp) return;
+    temp.ax = px === "l" ? 0 : px === "r" ? 1 : 0.5;
+    temp.ay = py === "t" ? 0 : py === "b" ? 1 : 0.5;
+    var sz = tempSize();
+    var p = anchorPos(sz.w, sz.h);
+    temp.x = p.x;
+    temp.y = p.y;
+    render();
+  }
+
+  function loadFile(file){
+    if (!file) return;
+    if (file.type && file.type.indexOf("image/") !== 0){
+      $("fileMsg").textContent = "画像ファイルを選んでください";
+      return;
+    }
+    var url = URL.createObjectURL(file);
+    var im = new Image();
+    im.onload = function(){
+      temp = {
+        img: im, name: file.name,
+        sizeMode: "contain", pct: 50, basis: "height",
+        x: 0, y: 0, flip: false, ax: 0.5, ay: 0.5
+      };
+      var sz = tempSize();
+      var p0 = anchorPos(sz.w, sz.h);
+      temp.x = p0.x;
+      temp.y = p0.y;
+      setSeg("sizeSeg", "data-size", "contain");
+      $("fileMsg").textContent = file.name + "（" + im.naturalWidth + "×" + im.naturalHeight + "px）を仮置きしました";
+      $("bakeMsg").textContent = "";
+      show("adjustCard", true);
+      show("bakeCard", true);
+      render();
+    };
+    im.onerror = function(){
+      $("fileMsg").textContent = "画像を読み込めませんでした";
+    };
+    im.src = url;
+  }
+
+  function resetAll(msg){
+    fillBase();
+    snapshot = null;
+    bakeCount = 0;
+    temp = null;
+    show("adjustCard", false);
+    show("bakeCard", false);
+    $("bakeMsg").textContent = "";
+    if (msg) $("fileMsg").textContent = msg;
+    render();
+  }
+
+  function save(asJpeg){
+    if (temp){
+      $("msg").textContent = "仮置き中の画像があります。合成するか、仮置きをやめてから保存してください。";
+      return;
+    }
+    var type = asJpeg ? "image/jpeg" : "image/png";
+    var name = asJpeg ? "samune.jpg" : "samune.png";
+    base.toBlob(function(blob){
+      if (!blob){
+        $("msg").textContent = "保存に失敗しました。";
+        return;
+      }
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+      resultUrl = URL.createObjectURL(blob);
+      $("resultImg").src = resultUrl;
+      $("resultBox").style.display = "block";
+      var a = document.createElement("a");
+      a.href = resultUrl;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      $("msg").textContent = name + " を保存しました（1280×720px）";
+    }, type, 0.92);
+  }
+
+  // ---- セグメント（選択式ボタン）の配線 ----
+  function clearSeg(segId){
+    Array.prototype.forEach.call($(segId).querySelectorAll("button"), function(b){
+      b.classList.remove("on");
+    });
+  }
+  function setSeg(segId, attr, val){
+    Array.prototype.forEach.call($(segId).querySelectorAll("button"), function(b){
+      b.classList.toggle("on", b.getAttribute(attr) === val);
+    });
+  }
+  function segWire(segId, attr, fn){
+    Array.prototype.forEach.call($(segId).querySelectorAll("button"), function(btn){
+      btn.addEventListener("click", function(){
+        setSeg(segId, attr, btn.getAttribute(attr));
+        fn(btn.getAttribute(attr));
+      });
+    });
+  }
+
+  segWire("bgSeg", "data-bg", function(v){
+    bg = v;
+    resetAll("台紙を" + (v === "black" ? "黒" : "白") + "にして、最初からやり直しました");
+  });
+  segWire("sizeSeg", "data-size", function(v){
+    if (v === "cover" || v === "contain") setSize(v, null);
+    else setSize("pct", parseInt(v, 10));
+  });
+  segWire("basisSeg", "data-basis", function(v){
+    if (!temp) return;
+    temp.basis = v;
+    if (temp.sizeMode === "pct") setSize("pct", temp.pct);
+    else render();
+  });
+  segWire("stepSeg", "data-step", function(v){
+    step = parseInt(v, 10);
+    $("stepDisp").textContent = v;
+  });
+
+  // ---- イベント ----
+  $("drop").addEventListener("click", function(){ $("fileInput").click(); });
+  $("fileInput").addEventListener("change", function(){
+    loadFile($("fileInput").files[0]);
+    $("fileInput").value = "";
+  });
+  ["dragover", "dragleave", "drop"].forEach(function(ev){
+    $("drop").addEventListener(ev, function(e){ e.preventDefault(); });
+  });
+  $("drop").addEventListener("drop", function(e){
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    loadFile(f);
+  });
+
+  Array.prototype.forEach.call($("posPad").querySelectorAll("button"), function(btn){
+    btn.addEventListener("click", function(){
+      applyPos(btn.getAttribute("data-x"), btn.getAttribute("data-y"));
+    });
+  });
+  Array.prototype.forEach.call($("movePad").querySelectorAll("button"), function(btn){
+    btn.addEventListener("click", function(){
+      if (!temp) return;
+      temp.ax = null; temp.ay = null;
+      temp.x += parseInt(btn.getAttribute("data-dx"), 10) * step;
+      temp.y += parseInt(btn.getAttribute("data-dy"), 10) * step;
+      render();
+    });
+  });
+  $("pctUp").addEventListener("click", function(){ bumpPct(5); });
+  $("pctDown").addEventListener("click", function(){ bumpPct(-5); });
+  $("flipBtn").addEventListener("click", function(){
+    if (!temp) return;
+    temp.flip = !temp.flip;
+    render();
+  });
+  $("xIn").addEventListener("change", function(){
+    if (!temp) return;
+    var v = parseInt($("xIn").value, 10);
+    if (!isNaN(v)){ temp.ax = null; temp.ay = null; temp.x = v; render(); }
+  });
+  $("yIn").addEventListener("change", function(){
+    if (!temp) return;
+    var v = parseInt($("yIn").value, 10);
+    if (!isNaN(v)){ temp.ax = null; temp.ay = null; temp.y = v; render(); }
+  });
+  $("sizeIn").addEventListener("change", function(){
+    if (!temp) return;
+    var v = parseInt($("sizeIn").value, 10);
+    if (!isNaN(v)){
+      clearSeg("sizeSeg");
+      setSize("pct", Math.min(400, Math.max(5, v)));
+    }
+  });
+
+  $("bakeBtn").addEventListener("click", function(){
+    if (!temp) return;
+    snapshot = document.createElement("canvas");
+    snapshot.width = W; snapshot.height = H;
+    snapshot.getContext("2d").drawImage(base, 0, 0);
+    drawTempTo(bctx);
+    temp = null;
+    bakeCount++;
+    show("adjustCard", false);
+    $("bakeMsg").textContent = "合成しました（焼き込み済み: " + bakeCount + "枚）";
+    render();
+  });
+  $("discardBtn").addEventListener("click", function(){
+    temp = null;
+    show("adjustCard", false);
+    $("bakeMsg").textContent = "仮置きをやめました";
+    render();
+  });
+  $("undoBtn").addEventListener("click", function(){
+    if (!snapshot) return;
+    bctx.drawImage(snapshot, 0, 0);
+    snapshot = null;
+    bakeCount = Math.max(0, bakeCount - 1);
+    $("bakeMsg").textContent = "直前の合成を取り消しました";
+    render();
+  });
+
+  $("savePng").addEventListener("click", function(){ save(false); });
+  $("saveJpg").addEventListener("click", function(){ save(true); });
+
+  document.addEventListener("keydown", function(e){
+    if (!temp) return;
+    var tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    var dx = 0, dy = 0;
+    if (e.key === "ArrowLeft") dx = -step;
+    else if (e.key === "ArrowRight") dx = step;
+    else if (e.key === "ArrowUp") dy = -step;
+    else if (e.key === "ArrowDown") dy = step;
+    else return;
+    e.preventDefault();
+    temp.ax = null; temp.ay = null;
+    temp.x += dx;
+    temp.y += dy;
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
