@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>動く文字メーカー（仮）— 動く文字をWebMで書き出す</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=M+PLUS+Rounded+1c:wght@400;700;800&family=Shippori+Mincho:wght@400;700;800&family=Kaisei+Decol:wght@400;700&family=Yusei+Magic&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#171a21; --panel:#21252f; --panel2:#282d3a; --line:#3a4152;
+    --text:#eef1f6; --sub:#9aa5b5; --accent:#ffd34d; --accent-text:#231a00;
+    --btn:#39415a; --btn-text:#eef1f6;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--text);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;}
+  .wrap{max-width:720px; margin:0 auto; padding:16px 14px 40px;}
+  h1{font-size:20px; margin:6px 0 2px;}
+  .lead{color:var(--sub); font-size:13px; margin:0 0 14px; line-height:1.6;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px;}
+  .card h2{font-size:14px; margin:0 0 10px; color:var(--sub); font-weight:600; letter-spacing:.05em;}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
+  .row:last-child{margin-bottom:0;}
+  button{font-size:16px; padding:12px 16px; border-radius:10px; border:1px solid var(--line);
+    background:var(--btn); color:var(--btn-text); cursor:pointer;}
+  button:active{transform:scale(.97);}
+  button.primary{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  button:disabled{opacity:.45; cursor:default;}
+  button.on{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  label{font-size:14px; color:var(--sub);}
+  input[type="text"]{width:100%; font-size:18px; padding:11px 12px; border-radius:8px;
+    border:1px solid var(--line); background:var(--panel2); color:var(--text);}
+  input[type="color"]{width:52px; height:40px; padding:0; border:1px solid var(--line);
+    border-radius:8px; background:var(--panel2);}
+  input[type="range"]{flex:1; min-width:120px; accent-color:var(--accent);}
+  .seg{display:flex; gap:8px; flex-wrap:wrap;}
+  .seg button{font-size:14px; padding:9px 14px; border-radius:999px;}
+  .seg button.on{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  .sw{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .sw button{width:36px; height:36px; padding:0; border-radius:50%; border:2px solid var(--line);}
+  .sw button.on{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent);}
+  .prevbox{border:1px solid var(--line); border-radius:10px; padding:10px;
+    background:repeating-conic-gradient(#2b303d 0 25%, #22262f 0 50%) 0 0/24px 24px;
+    text-align:center;}
+  .prevbox canvas{max-width:100%; max-height:45vh; width:auto; height:auto; display:block; margin:0 auto;}
+  .prevbox video{max-width:100%; max-height:45vh; height:auto;}
+  .sticky{position:sticky; top:8px; z-index:10; box-shadow:0 6px 18px rgba(0,0,0,.35);}
+  .msg{min-height:20px; font-size:13px; color:var(--accent); margin-top:8px;}
+  .info{font-size:13px; color:var(--sub); margin-top:8px; min-height:18px;}
+  .foot{color:var(--sub); font-size:12px; line-height:1.7;}
+  .foot b{color:var(--text);}
+  .val{font-size:13px; color:var(--text); min-width:44px; text-align:right;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎬 動く文字メーカー（仮）</h1>
+  <p class="lead">文字に動きを付けて、WebM動画として書き出す道具です。ショート動画の素材用に、背景は透過のほかクロマキー用の色も選べます。装飾は最小限で、主役は動きです。</p>
+
+  <div class="card sticky">
+    <h2>プレビュー</h2>
+    <div class="prevbox"><canvas id="cv" width="1080" height="1920"></canvas></div>
+    <div class="info" id="sizeInfo"></div>
+  </div>
+
+  <div class="card">
+    <h2>1. 文字</h2>
+    <input type="text" id="textIn" value="わくわく" maxlength="20">
+  </div>
+
+  <div class="card">
+    <h2>2. 動き（主役）</h2>
+    <div class="seg" id="motionSeg">
+      <button data-motion="bounce" class="on">順に跳ねる</button>
+      <button data-motion="wave">波うち</button>
+      <button data-motion="pop">ポップ登場</button>
+      <button data-motion="sway">ゆらゆら</button>
+      <button data-motion="float">ふわふわ</button>
+      <button data-motion="slide">スライド登場</button>
+      <button data-motion="sparkle">キラキラ</button>
+      <button data-motion="pulse">ドキドキ</button>
+      <button data-motion="spin">くるっと登場</button>
+      <button data-motion="jelly">ジェリー</button>
+      <button data-motion="fade">フェード</button>
+      <button data-motion="fadeseq">順にフェード</button>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <label>ループの長さ</label>
+      <div class="seg" id="loopSeg">
+        <button data-loop="1000">1秒</button>
+        <button data-loop="1500">1.5秒</button>
+        <button data-loop="2000" class="on">2秒</button>
+        <button data-loop="3000">3秒</button>
+        <button data-loop="4000">4秒</button>
+      </div>
+    </div>
+    <div class="row">
+      <label for="ampRange">動きの大きさ</label>
+      <input type="range" id="ampRange" min="30" max="200" step="5" value="100">
+      <span class="val" id="ampVal">100%</span>
+    </div>
+    <div class="info">大きさと長さは別々に決められます。大きく＋短く＝早くて激しく、小さく＋長く＝ゆっくり小さく動きます。</div>
+  </div>
+
+  <div class="card">
+    <h2>3. 書体と色（装飾は最小限）</h2>
+    <div class="seg" id="fontSeg" style="margin-bottom:10px;">
+      <button data-font="'Noto Sans JP',sans-serif" class="on">ゴシック</button>
+      <button data-font="'M PLUS Rounded 1c',sans-serif">丸ゴシック</button>
+      <button data-font="'Shippori Mincho',serif">明朝</button>
+      <button data-font="'Kaisei Decol',serif">デコ</button>
+      <button data-font="'Yusei Magic',sans-serif">手書き風</button>
+    </div>
+    <div class="row">
+      <label>太さ</label>
+      <div class="seg" id="weightSeg">
+        <button data-weight="400">ふつう</button>
+        <button data-weight="700">太い</button>
+        <button data-weight="900" class="on">特太</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>文字の色</label>
+      <div class="sw" id="colorSw"></div>
+      <input type="color" id="colorIn" value="#ffffff" aria-label="文字の色（自由選択）">
+    </div>
+    <div class="row">
+      <label>フチの色</label>
+      <div class="sw" id="edgeSw"></div>
+      <input type="color" id="edgeIn" value="#000000" aria-label="フチの色（自由選択）">
+    </div>
+    <div class="row">
+      <label for="edgeRange">フチの太さ</label>
+      <input type="range" id="edgeRange" min="0" max="30" step="1" value="14">
+      <span class="val" id="edgeVal">14%</span>
+    </div>
+    <div class="row">
+      <label for="sizeRange">文字の大きさ</label>
+      <input type="range" id="sizeRange" min="8" max="40" step="1" value="20">
+      <span class="val" id="sizeVal">20%</span>
+    </div>
+    <div class="row">
+      <div class="seg" id="shadowSeg">
+        <button data-shadow="on" class="on">影あり</button>
+        <button data-shadow="off">影なし</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>4. 画面と背景</h2>
+    <div class="row">
+      <label>画面サイズ</label>
+      <div class="seg" id="sizeSeg">
+        <button data-size="1080x1920" class="on">縦 1080×1920（Shorts）</button>
+        <button data-size="720x1280">縦 720×1280</button>
+        <button data-size="1920x1080">横 1920×1080</button>
+        <button data-size="1280x720">横 1280×720</button>
+        <button data-size="1080x1080">正方形 1080×1080</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>背景（書き出し）</label>
+      <div class="seg" id="bgSeg">
+        <button data-bg="alpha" class="on">透過</button>
+        <button data-bg="#00ff00">緑（クロマキー）</button>
+        <button data-bg="#0000ff">青（クロマキー）</button>
+        <button data-bg="#ff00ff">マゼンタ（クロマキー）</button>
+        <button data-bg="#000000">黒</button>
+        <button data-bg="#ffffff">白</button>
+      </div>
+    </div>
+    <div class="info">透過が編集アプリで効かないときは、クロマキー用の色で書き出して、編集側で色を抜いてください。文字やフチと同じ色の背景は避けてください。</div>
+  </div>
+
+  <div class="card">
+    <h2>5. WebMで書き出す</h2>
+    <div class="row">
+      <button id="exportBtn" class="primary" style="flex:1;">WebMで書き出す（ループ1周分）</button>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="prevbox" id="resultBox" style="display:none; margin-top:10px;">
+      <div class="foot" style="margin-bottom:8px;">書き出した動画（スマホでは長押しでも保存できます）</div>
+      <video id="resultVideo" controls loop playsinline></video>
+      <div class="row" style="margin-top:10px; justify-content:center;">
+        <a id="dlLink" href="#" download="ugoku-moji.webm"><button>ファイルとして保存</button></a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card foot">
+    <b>使い方・注意</b><br>
+    ・書き出しは、ループ1周分をそのまま録画する方式です。長さは「ループの長さ」で選んだ秒数になります。<br>
+    ・透過WebMの書き出しと再生は、ブラウザによって対応状況が違います。Chrome（Android・PC）推奨です。編集アプリ側で透過が効くかは、アプリと版によります。<br>
+    ・「登場」系の動き（ポップ／スライド／くるっと）は、ループの後半は止まった状態で待機し、頭でまた登場します。<br>
+    ・「動きの大きさ」は動きの振れ幅だけを変えます。「ループの長さ」と組み合わせて、激しく／ゆっくりの表現を決めてください。<br>
+    ・文字はブラウザの中でだけ処理され、外部に送信されることはありません（フォントの読み込みのみ通信します）。
+  </div>
+
+  <p class="foot"><a href="../../index.html" style="color:var(--sub);">← カラの道具箱へ戻る</a>　／　<a href="../../LICENSE" style="color:var(--sub);">MIT License</a></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var cv = $("cv"), ctx = cv.getContext("2d");
+
+  var W = 1080, H = 1920;
+  var text = "わくわく";
+  var font = "'Noto Sans JP',sans-serif";
+  var weight = "900";
+  var color = "#ffffff";
+  var edgeColor = "#000000";
+  var edgePct = 14;
+  var sizePct = 20;
+  var shadow = true;
+  var motion = "bounce";
+  var loopMs = 2000;
+  var amp = 1.0;
+  var bg = "alpha";
+  var startTime = performance.now();
+  var recording = false;
+  var resultUrl = null;
+
+  function clamp01(v){ return v < 0 ? 0 : v > 1 ? 1 : v; }
+  function easeOutCubic(x){ return 1 - Math.pow(1 - x, 3); }
+  function easeOutBack(x){
+    var c1 = 1.70158 * amp, c3 = c1 + 1;
+    return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+  }
+
+  // 動きの定義: (文字インデックス, 全体, ループ位相0..1, フォントpx) -> 変形
+  var MOTIONS = {
+    bounce: function(i, n, p, fs){
+      var w = p * 1.15 - i * 0.06;
+      var dy = (w > 0 && w < 0.45) ? -Math.sin(w / 0.45 * Math.PI) * fs * 0.38 * amp : 0;
+      return { dy: dy };
+    },
+    wave: function(i, n, p, fs){
+      var a = p * Math.PI * 2 + i * 0.55;
+      return { dy: Math.sin(a) * fs * 0.13 * amp, rot: Math.sin(a) * 0.045 * amp };
+    },
+    pop: function(i, n, p, fs){
+      var lp = clamp01((p * 1.45 - i * 0.06) / 0.32);
+      return { s: Math.max(0.001, easeOutBack(lp)), alpha: Math.min(1, lp * 4) };
+    },
+    sway: function(i, n, p, fs){
+      var a = p * Math.PI * 2 + i * 0.45;
+      return { rot: Math.sin(a) * 0.15 * amp, dy: Math.cos(a) * fs * 0.05 * amp };
+    },
+    float: function(i, n, p, fs){
+      return { dy: (Math.sin(p * Math.PI * 2 + i * 0.4) * fs * 0.09 + Math.sin(p * Math.PI * 2) * fs * 0.04) * amp };
+    },
+    slide: function(i, n, p, fs){
+      var lp = clamp01((p * 1.4 - i * 0.05) / 0.3);
+      var e = easeOutCubic(lp);
+      return { dx: (1 - e) * (i % 2 ? -1 : 1) * fs * 1.1 * amp, alpha: lp };
+    },
+    sparkle: function(i, n, p, fs){
+      var v = Math.max(0, Math.sin(p * Math.PI * 2 - i * 0.75));
+      return { s: 1 + v * 0.22 * amp, alpha: 0.8 + 0.2 * v };
+    },
+    pulse: function(i, n, p, fs){
+      var v = Math.max(0, Math.sin(p * Math.PI * 2 - i * 0.5));
+      return { s: 1 + v * 0.16 * amp };
+    },
+    spin: function(i, n, p, fs){
+      var lp = clamp01((p * 1.45 - i * 0.06) / 0.35);
+      var e = easeOutCubic(lp);
+      return { rot: (1 - e) * -3.6 * amp, s: Math.max(0.001, e), alpha: Math.min(1, lp * 4) };
+    },
+    jelly: function(i, n, p, fs){
+      var w = (p - i * 0.055) % 1; if (w < 0) w += 1;
+      if (w >= 0.38) return {};
+      var k = Math.sin(w / 0.38 * Math.PI);
+      return { sx: 1 + 0.22 * k * amp, sy: 1 - 0.18 * k * amp };
+    },
+    fade: function(i, n, p, fs){
+      var v = (1 - Math.cos(p * Math.PI * 2)) / 2;
+      var depth = Math.min(1, 0.92 * amp);
+      return { alpha: 1 - depth * (1 - v) };
+    },
+    fadeseq: function(i, n, p, fs){
+      var w = p * 1.3 - i * 0.09;
+      var a = (w > 0 && w < 1) ? Math.sin(w * Math.PI) : 0;
+      return { alpha: a, dy: (1 - a) * -fs * 0.06 * amp };
+    }
+  };
+
+  function drawFrame(now){
+    var p = ((now - startTime) % loopMs) / loopMs;
+    ctx.clearRect(0, 0, W, H);
+    if (bg !== "alpha"){
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+    }
+    var chars = Array.from(text);
+    if (chars.length){
+      var fs = Math.round(Math.min(W, H) * sizePct / 100);
+      ctx.font = weight + " " + fs + "px " + font;
+      var widths = chars.map(function(c){ return ctx.measureText(c).width; });
+      var total = widths.reduce(function(a, b){ return a + b; }, 0);
+      var scaleDown = total > W * 0.94 ? (W * 0.94) / total : 1;
+      var cx = (W - total * scaleDown) / 2;
+      var cy = H / 2;
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      ctx.miterLimit = 2;
+      for (var i = 0; i < chars.length; i++){
+        var w = widths[i] * scaleDown;
+        var tr = MOTIONS[motion](i, chars.length, p, fs) || {};
+        var s = tr.s != null ? tr.s : 1;
+        ctx.save();
+        ctx.globalAlpha = tr.alpha != null ? tr.alpha : 1;
+        ctx.translate(cx + w / 2 + (tr.dx || 0), cy + (tr.dy || 0));
+        if (tr.rot) ctx.rotate(tr.rot);
+        ctx.scale((tr.sx != null ? tr.sx : 1) * s, (tr.sy != null ? tr.sy : 1) * s);
+        ctx.scale(scaleDown, scaleDown);
+        if (shadow){
+          ctx.shadowColor = "rgba(0,0,0,0.45)";
+          ctx.shadowBlur = fs * 0.06;
+          ctx.shadowOffsetY = fs * 0.05;
+        }
+        if (edgePct > 0){
+          ctx.strokeStyle = edgeColor;
+          ctx.lineWidth = fs * edgePct / 100;
+          ctx.strokeText(chars[i], -widths[i] / 2, 0);
+        }
+        ctx.fillStyle = color;
+        ctx.fillText(chars[i], -widths[i] / 2, 0);
+        ctx.restore();
+        cx += w;
+      }
+    }
+    requestAnimationFrame(drawFrame);
+  }
+
+  function updateSizeInfo(){
+    $("sizeInfo").textContent = "画面: " + W + "×" + H + "px／ループ: " + (loopMs / 1000) + "秒";
+  }
+
+  // ---- セグメント配線 ----
+  function setSeg(segId, attr, val){
+    Array.prototype.forEach.call($(segId).querySelectorAll("button"), function(b){
+      b.classList.toggle("on", b.getAttribute(attr) === val);
+    });
+  }
+  function segWire(segId, attr, fn){
+    Array.prototype.forEach.call($(segId).querySelectorAll("button"), function(btn){
+      btn.addEventListener("click", function(){
+        setSeg(segId, attr, btn.getAttribute(attr));
+        fn(btn.getAttribute(attr));
+      });
+    });
+  }
+  segWire("motionSeg", "data-motion", function(v){ motion = v; startTime = performance.now(); });
+  segWire("loopSeg", "data-loop", function(v){ loopMs = parseInt(v, 10); startTime = performance.now(); updateSizeInfo(); });
+  segWire("fontSeg", "data-font", function(v){ font = v; });
+  segWire("weightSeg", "data-weight", function(v){ weight = v; });
+  segWire("shadowSeg", "data-shadow", function(v){ shadow = v === "on"; });
+  segWire("bgSeg", "data-bg", function(v){ bg = v; });
+  segWire("sizeSeg", "data-size", function(v){
+    var parts = v.split("x");
+    W = parseInt(parts[0], 10); H = parseInt(parts[1], 10);
+    cv.width = W; cv.height = H;
+    updateSizeInfo();
+  });
+
+  // ---- 色スウォッチ ----
+  function buildSwatches(elId, inputId, list, initial, apply){
+    var el = $(elId);
+    list.forEach(function(c){
+      var b = document.createElement("button");
+      b.style.background = c;
+      b.setAttribute("data-c", c);
+      if (c.toLowerCase() === initial.toLowerCase()) b.classList.add("on");
+      b.setAttribute("aria-label", c);
+      b.addEventListener("click", function(){
+        Array.prototype.forEach.call(el.querySelectorAll("button"), function(x){ x.classList.remove("on"); });
+        b.classList.add("on");
+        $(inputId).value = c;
+        apply(c);
+      });
+      el.appendChild(b);
+    });
+    $(inputId).addEventListener("input", function(){
+      Array.prototype.forEach.call(el.querySelectorAll("button"), function(x){ x.classList.remove("on"); });
+      apply($(inputId).value);
+    });
+  }
+  buildSwatches("colorSw", "colorIn",
+    ["#ffffff", "#ffd34d", "#ff7eb6", "#6ec6ff", "#7be495", "#ffa94d", "#b197fc", "#ff6b6b"],
+    "#ffffff", function(c){ color = c; });
+  buildSwatches("edgeSw", "edgeIn",
+    ["#000000", "#ffffff", "#5b3a1e", "#1d3557", "#e64980", "#2b8a3e"],
+    "#000000", function(c){ edgeColor = c; });
+
+  // ---- 入力 ----
+  $("textIn").addEventListener("input", function(){
+    text = $("textIn").value;
+  });
+  $("ampRange").addEventListener("input", function(){
+    amp = parseInt($("ampRange").value, 10) / 100;
+    $("ampVal").textContent = $("ampRange").value + "%";
+  });
+  $("edgeRange").addEventListener("input", function(){
+    edgePct = parseInt($("edgeRange").value, 10);
+    $("edgeVal").textContent = edgePct + "%";
+  });
+  $("sizeRange").addEventListener("input", function(){
+    sizePct = parseInt($("sizeRange").value, 10);
+    $("sizeVal").textContent = sizePct + "%";
+  });
+
+  // ---- 書き出し ----
+  $("exportBtn").addEventListener("click", function(){
+    if (recording) return;
+    if (!window.MediaRecorder || !cv.captureStream){
+      $("msg").textContent = "このブラウザではWebM書き出しに対応していません。Chromeで開いてください。";
+      return;
+    }
+    var mime = "";
+    ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].forEach(function(m){
+      if (!mime && window.MediaRecorder.isTypeSupported(m)) mime = m;
+    });
+    if (!mime){
+      $("msg").textContent = "このブラウザではWebM書き出しに対応していません。Chromeで開いてください。";
+      return;
+    }
+    recording = true;
+    $("exportBtn").disabled = true;
+    $("msg").textContent = "書き出し中…（ループ1周分を録画しています）";
+    startTime = performance.now();
+    var stream = cv.captureStream(30);
+    var rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8000000 });
+    var chunks = [];
+    rec.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = function(){
+      recording = false;
+      $("exportBtn").disabled = false;
+      var blob = new Blob(chunks, { type: "video/webm" });
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+      resultUrl = URL.createObjectURL(blob);
+      $("resultVideo").src = resultUrl;
+      $("dlLink").href = resultUrl;
+      $("resultBox").style.display = "block";
+      $("msg").textContent = "書き出しました（" + W + "×" + H + "px／" + (loopMs / 1000) + "秒／" +
+        Math.max(1, Math.round(blob.size / 1024)) + "KB）";
+    };
+    rec.start(200);
+    setTimeout(function(){ if (rec.state !== "inactive") rec.stop(); }, loopMs + 60);
+  });
+
+  updateSizeInfo();
+  if (document.fonts && document.fonts.ready){
+    document.fonts.ready.then(function(){ startTime = performance.now(); });
+  }
+  requestAnimationFrame(drawFrame);
+})();
+</script>
+</body>
+</html>
