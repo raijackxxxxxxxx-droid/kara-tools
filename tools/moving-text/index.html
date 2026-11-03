@@ -34,6 +34,8 @@
     border:1px solid var(--line); background:var(--panel2); color:var(--text);}
   input[type="color"]{width:52px; height:40px; padding:0; border:1px solid var(--line);
     border-radius:8px; background:var(--panel2);}
+  input[type="number"]{width:84px; font-size:16px; padding:9px 10px; border-radius:8px;
+    border:1px solid var(--line); background:var(--panel2); color:var(--text);}
   input[type="range"]{flex:1; min-width:120px; accent-color:var(--accent);}
   .seg{display:flex; gap:8px; flex-wrap:wrap;}
   .seg button{font-size:14px; padding:9px 14px; border-radius:999px;}
@@ -73,6 +75,7 @@
   <div class="card">
     <h2>2. 動き（主役）</h2>
     <div class="seg" id="motionSeg">
+      <button data-motion="none">動きなし</button>
       <button data-motion="bounce" class="on">順に跳ねる</button>
       <button data-motion="wave">波うち</button>
       <button data-motion="pop">ポップ登場</button>
@@ -95,12 +98,16 @@
         <button data-loop="3000">3秒</button>
         <button data-loop="4000">4秒</button>
       </div>
+      <input type="number" id="loopIn" min="0.5" max="10" step="0.1" value="2" aria-label="ループの長さ（秒）">
+      <label for="loopIn">秒</label>
     </div>
     <div class="row">
       <label for="ampRange">動きの大きさ</label>
       <input type="range" id="ampRange" min="30" max="200" step="5" value="100">
-      <span class="val" id="ampVal">100%</span>
+      <input type="number" id="ampIn" min="30" max="400" step="5" value="100" aria-label="動きの大きさ（%）">
+      <label for="ampIn">%</label>
     </div>
+    <div class="info">数字入力でも決められます。動きの大きさは、入力なら最大400%まで（スライダーは200%まで）。</div>
     <div class="info">大きさと長さは別々に決められます。大きく＋短く＝早くて激しく、小さく＋長く＝ゆっくり小さく動きます。</div>
     <div class="row" style="margin-top:12px;">
       <label>フェードイン・アウト</label>
@@ -206,7 +213,7 @@
     ・透過WebMの書き出しと再生は、ブラウザによって対応状況が違います。Chrome（Android・PC）推奨です。編集アプリ側で透過が効くかは、アプリと版によります。<br>
     ・「登場」系の動き（ポップ／スライド／くるっと）は、ループの後半は止まった状態で待機し、頭でまた登場します。<br>
     ・「動きの大きさ」は動きの振れ幅だけを変えます。「ループの長さ」と組み合わせて、激しく／ゆっくりの表現を決めてください。<br>
-    ・「フェードイン・アウト」は、選んだ動きに重ねてかかる透明度のフェードです。単体の「フェード」「順にフェード」の動きとは別に使えます。<br>
+    ・「フェードイン・アウト」は、選んだ動きに重ねてかかる透明度のフェードです。単体の「フェード」「順にフェード」の動きとは別に使えます。「動きなし」＋フェードで、フェードだけの素材も作れます。<br>
     ・文字はブラウザの中でだけ処理され、外部に送信されることはありません（フォントの読み込みのみ通信します）。
   </div>
 
@@ -246,6 +253,7 @@
 
   // 動きの定義: (文字インデックス, 全体, ループ位相0..1, フォントpx) -> 変形
   var MOTIONS = {
+    none: function(i, n, p, fs){ return {}; },
     bounce: function(i, n, p, fs){
       var w = p * 1.15 - i * 0.06;
       var dy = (w > 0 && w < 0.45) ? -Math.sin(w / 0.45 * Math.PI) * fs * 0.38 * amp : 0;
@@ -377,7 +385,22 @@
   }
   segWire("motionSeg", "data-motion", function(v){ motion = v; startTime = performance.now(); });
   segWire("fadeSeg", "data-fade", function(v){ fadePct = parseInt(v, 10); });
-  segWire("loopSeg", "data-loop", function(v){ loopMs = parseInt(v, 10); startTime = performance.now(); updateSizeInfo(); });
+  segWire("loopSeg", "data-loop", function(v){
+    loopMs = parseInt(v, 10);
+    $("loopIn").value = String(loopMs / 1000);
+    startTime = performance.now();
+    updateSizeInfo();
+  });
+  $("loopIn").addEventListener("change", function(){
+    var sec = parseFloat($("loopIn").value);
+    if (isNaN(sec)) { $("loopIn").value = String(loopMs / 1000); return; }
+    sec = Math.min(10, Math.max(0.5, sec));
+    loopMs = Math.round(sec * 1000);
+    $("loopIn").value = String(loopMs / 1000);
+    setSeg("loopSeg", "data-loop", String(loopMs));
+    startTime = performance.now();
+    updateSizeInfo();
+  });
   segWire("fontSeg", "data-font", function(v){ font = v; });
   segWire("weightSeg", "data-weight", function(v){ weight = v; });
   segWire("shadowSeg", "data-shadow", function(v){ shadow = v === "on"; });
@@ -424,7 +447,15 @@
   });
   $("ampRange").addEventListener("input", function(){
     amp = parseInt($("ampRange").value, 10) / 100;
-    $("ampVal").textContent = $("ampRange").value + "%";
+    $("ampIn").value = $("ampRange").value;
+  });
+  $("ampIn").addEventListener("change", function(){
+    var v = parseInt($("ampIn").value, 10);
+    if (isNaN(v)) { $("ampIn").value = String(Math.round(amp * 100)); return; }
+    v = Math.min(400, Math.max(30, v));
+    amp = v / 100;
+    $("ampIn").value = String(v);
+    $("ampRange").value = String(Math.min(200, v));
   });
   $("edgeRange").addEventListener("input", function(){
     edgePct = parseInt($("edgeRange").value, 10);
