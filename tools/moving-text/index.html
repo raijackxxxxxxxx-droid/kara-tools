@@ -102,6 +102,16 @@
       <span class="val" id="ampVal">100%</span>
     </div>
     <div class="info">大きさと長さは別々に決められます。大きく＋短く＝早くて激しく、小さく＋長く＝ゆっくり小さく動きます。</div>
+    <div class="row" style="margin-top:12px;">
+      <label>フェードイン・アウト</label>
+      <div class="seg" id="fadeSeg">
+        <button data-fade="0" class="on">なし</button>
+        <button data-fade="15">短め</button>
+        <button data-fade="25">ふつう</button>
+        <button data-fade="40">長め</button>
+      </div>
+    </div>
+    <div class="info">選んだ動きはそのままに、ループの頭でフェードイン、終わりでフェードアウトを重ねます。素材の前後につなぎやすくなります。</div>
   </div>
 
   <div class="card">
@@ -196,6 +206,7 @@
     ・透過WebMの書き出しと再生は、ブラウザによって対応状況が違います。Chrome（Android・PC）推奨です。編集アプリ側で透過が効くかは、アプリと版によります。<br>
     ・「登場」系の動き（ポップ／スライド／くるっと）は、ループの後半は止まった状態で待機し、頭でまた登場します。<br>
     ・「動きの大きさ」は動きの振れ幅だけを変えます。「ループの長さ」と組み合わせて、激しく／ゆっくりの表現を決めてください。<br>
+    ・「フェードイン・アウト」は、選んだ動きに重ねてかかる透明度のフェードです。単体の「フェード」「順にフェード」の動きとは別に使えます。<br>
     ・文字はブラウザの中でだけ処理され、外部に送信されることはありません（フォントの読み込みのみ通信します）。
   </div>
 
@@ -220,6 +231,7 @@
   var motion = "bounce";
   var loopMs = 2000;
   var amp = 1.0;
+  var fadePct = 0;
   var bg = "alpha";
   var startTime = performance.now();
   var recording = false;
@@ -290,8 +302,15 @@
     }
   };
 
+  function smooth01(t){ t = clamp01(t); return t * t * (3 - 2 * t); }
+
   function drawFrame(now){
     var p = ((now - startTime) % loopMs) / loopMs;
+    var env = 1;
+    if (fadePct > 0){
+      var f = fadePct / 100;
+      env = Math.min(smooth01(p / f), smooth01((1 - p) / f));
+    }
     ctx.clearRect(0, 0, W, H);
     if (bg !== "alpha"){
       ctx.fillStyle = bg;
@@ -314,7 +333,7 @@
         var tr = MOTIONS[motion](i, chars.length, p, fs) || {};
         var s = tr.s != null ? tr.s : 1;
         ctx.save();
-        ctx.globalAlpha = tr.alpha != null ? tr.alpha : 1;
+        ctx.globalAlpha = (tr.alpha != null ? tr.alpha : 1) * env;
         ctx.translate(cx + w / 2 + (tr.dx || 0), cy + (tr.dy || 0));
         if (tr.rot) ctx.rotate(tr.rot);
         ctx.scale((tr.sx != null ? tr.sx : 1) * s, (tr.sy != null ? tr.sy : 1) * s);
@@ -357,6 +376,7 @@
     });
   }
   segWire("motionSeg", "data-motion", function(v){ motion = v; startTime = performance.now(); });
+  segWire("fadeSeg", "data-fade", function(v){ fadePct = parseInt(v, 10); });
   segWire("loopSeg", "data-loop", function(v){ loopMs = parseInt(v, 10); startTime = performance.now(); updateSizeInfo(); });
   segWire("fontSeg", "data-font", function(v){ font = v; });
   segWire("weightSeg", "data-weight", function(v){ weight = v; });
