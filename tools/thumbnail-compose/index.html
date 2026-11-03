@@ -37,9 +37,9 @@
   .drop b{color:var(--text); font-size:16px;}
   .prevbox{border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--panel2);
     text-align:center;}
-  .prevbox canvas{max-width:100%; max-height:60vh; width:auto; height:auto; display:block; margin:0 auto;}
-  .prevbox img{max-width:100%; max-height:60vh; height:auto;}
-  .prevscroll.scroll{max-height:60vh; overflow-y:auto;}
+  .prevbox canvas{max-width:100%; max-height:45vh; width:auto; height:auto; display:block; margin:0 auto;}
+  .prevbox img{max-width:100%; max-height:45vh; height:auto;}
+  .prevscroll.scroll{max-height:45vh; overflow-y:auto;}
   .prevscroll.scroll canvas{width:100%; max-height:none;}
   .sticky{position:sticky; top:8px; z-index:10; box-shadow:0 6px 18px rgba(0,0,0,.35);}
   .pad{display:grid; grid-template-columns:repeat(3,58px); gap:8px;}
@@ -58,7 +58,7 @@
   <p class="lead">画像を1枚ずつ置いて、「合成」で1枚に焼き込むだけの合成台です。台紙のサイズはプリセットから選べます（サムネ用1280×720のほか、フルHD・正方形・縦長・読み込んだ画像に合わせる）。ドラッグはなし、ボタンだけで位置と大きさを決めます。レイヤーは持たない代わりに、置いて・焼いて・次、が速い作りです。</p>
 
   <div class="card sticky">
-    <h2>プレビュー（点線の枠は仮置き中の範囲で、保存には入りません）</h2>
+    <h2>プレビュー（点線枠は保存されません）</h2>
     <div class="prevbox"><div class="prevscroll" id="prevScroll"><canvas id="cv" width="1280" height="720"></canvas></div></div>
     <div class="row" style="margin-top:10px;">
       <label>プレビュー表示</label>
