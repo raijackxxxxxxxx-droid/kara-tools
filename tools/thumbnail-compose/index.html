@@ -37,8 +37,10 @@
   .drop b{color:var(--text); font-size:16px;}
   .prevbox{border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--panel2);
     text-align:center;}
-  .prevbox canvas{max-width:100%; height:auto; display:block; margin:0 auto;}
-  .prevbox img{max-width:100%; height:auto;}
+  .prevbox canvas{max-width:100%; max-height:60vh; width:auto; height:auto; display:block; margin:0 auto;}
+  .prevbox img{max-width:100%; max-height:60vh; height:auto;}
+  .prevscroll.scroll{max-height:60vh; overflow-y:auto;}
+  .prevscroll.scroll canvas{width:100%; max-height:none;}
   .sticky{position:sticky; top:8px; z-index:10; box-shadow:0 6px 18px rgba(0,0,0,.35);}
   .pad{display:grid; grid-template-columns:repeat(3,58px); gap:8px;}
   .pad button{height:52px; font-size:20px; padding:0;}
@@ -57,7 +59,14 @@
 
   <div class="card sticky">
     <h2>プレビュー（点線の枠は仮置き中の範囲で、保存には入りません）</h2>
-    <div class="prevbox"><canvas id="cv" width="1280" height="720"></canvas></div>
+    <div class="prevbox"><div class="prevscroll" id="prevScroll"><canvas id="cv" width="1280" height="720"></canvas></div></div>
+    <div class="row" style="margin-top:10px;">
+      <label>プレビュー表示</label>
+      <div class="seg" id="dispSeg">
+        <button data-disp="fit" class="on">全体を縮小</button>
+        <button data-disp="scroll">大きくスクロール</button>
+      </div>
+    </div>
     <div class="info" id="baseInfo">焼き込み済み: 0枚</div>
   </div>
 
@@ -475,6 +484,10 @@
       setBoard(parseInt(parts[0], 10), parseInt(parts[1], 10));
       resetAll("台紙を " + W + "×" + H + " にして、最初からやり直しました");
     }
+  });
+  segWire("dispSeg", "data-disp", function(v){
+    $("prevScroll").classList.toggle("scroll", v === "scroll");
+    if (v === "scroll") $("prevScroll").scrollTop = 0;
   });
   segWire("bgSeg", "data-bg", function(v){
     bg = v;
