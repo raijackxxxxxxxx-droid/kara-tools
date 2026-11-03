@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>サムネ合成君（仮）— 画像を置いて焼き込むだけのサムネ台</title>
+<title>画像合成君（仮）— 画像を置いて焼き込むだけの合成台</title>
 <style>
   :root{
     --bg:#171a21; --panel:#21252f; --panel2:#282d3a; --line:#3a4152;
@@ -52,13 +52,25 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>🧩 サムネ合成君（仮）</h1>
-  <p class="lead">画像を1枚ずつ置いて、「合成」で1枚に焼き込むだけのサムネ台です。台紙は1280×720固定。ドラッグはなし、ボタンだけで位置と大きさを決めます。レイヤーは持たない代わりに、置いて・焼いて・次、が速い作りです。</p>
+  <h1>🧩 画像合成君（仮）</h1>
+  <p class="lead">画像を1枚ずつ置いて、「合成」で1枚に焼き込むだけの合成台です。台紙のサイズはプリセットから選べます（サムネ用1280×720のほか、フルHD・正方形・縦長・読み込んだ画像に合わせる）。ドラッグはなし、ボタンだけで位置と大きさを決めます。レイヤーは持たない代わりに、置いて・焼いて・次、が速い作りです。</p>
 
   <div class="card sticky">
     <h2>プレビュー（点線の枠は仮置き中の範囲で、保存には入りません）</h2>
     <div class="prevbox"><canvas id="cv" width="1280" height="720"></canvas></div>
     <div class="info" id="baseInfo">焼き込み済み: 0枚</div>
+  </div>
+
+  <div class="card">
+    <h2>台紙のサイズ（切り替えると最初からやり直し）</h2>
+    <div class="seg" id="boardSeg">
+      <button data-board="1280x720" class="on">サムネ 1280×720</button>
+      <button data-board="1920x1080">フルHD 1920×1080</button>
+      <button data-board="1080x1080">正方形 1080×1080</button>
+      <button data-board="1080x1920">縦長 1080×1920</button>
+      <button data-board="image">画像に合わせる</button>
+    </div>
+    <div class="info" id="boardInfo"></div>
   </div>
 
   <div class="card">
@@ -176,6 +188,7 @@
     ・流れは「画像を置く → 大きさと置き場所を決める → 合成」の繰り返しです。合成した画像は、あとから個別に動かしたり消したりはできません。間違えたら「1つ戻す」で直前の合成だけ取り消せます。<br>
     ・最初の1枚を背景にしたいときは、大きさ「全面」を選んで合成してください。全体を見せたい画像は「収める」が安全です。<br>
     ・端の置き場所（↖など）は、台紙の端から少し内側に置くようになっています。端まで寄せたいときは微調整でずらしてください。置き場所をパッドで決めたあとに大きさを変えても、その端・角は動きません（微調整でずらしたあとは、中心を保って拡縮します）。<br>
+    ・台紙のサイズは最初に選んでください。途中で切り替えると最初からやり直しになります。「画像に合わせる」を選ぶと、次に読み込んだ画像がそのまま台紙になり、その画像の大きさが台紙サイズになります（週間スケジュールのテンプレ画像など用）。とても大きい画像を台紙にすると、スマホでは重くなることがあります。<br>
     ・文字画像は、もじPNGメーカーで作った透過PNGを置くと相性がいいです。<br>
     ・仮置き中の画像がある間は保存できません。合成するか、仮置きをやめてから保存してください。<br>
     ・画像はブラウザの中でだけ処理され、外部に送信されることはありません。ネット接続も不要です。
@@ -190,6 +203,8 @@
   var $ = function(id){ return document.getElementById(id); };
 
   var W = 1280, H = 720;
+  var boardMode = "fixed";   // fixed | image
+  var imageBoardSet = false; // 「画像に合わせる」で台紙が決まったか
   var base = document.createElement("canvas");
   base.width = W; base.height = H;
   var bctx = base.getContext("2d");
@@ -229,6 +244,25 @@
   }
 
   var MX = Math.round(W * 0.03), MY = Math.round(H * 0.03);
+
+  function updateBoardInfo(){
+    var t = "現在の台紙: " + W + "×" + H + "px";
+    if (boardMode === "image"){
+      t += imageBoardSet ? "（最初の画像に合わせました）" : "（次の画像で決まります）";
+    }
+    $("boardInfo").textContent = t;
+  }
+
+  // 台紙サイズの変更。呼び出し側で resetAll すること。
+  function setBoard(w, h){
+    W = w; H = h;
+    MX = Math.round(W * 0.03);
+    MY = Math.round(H * 0.03);
+    base.width = W; base.height = H;
+    var cv = $("cv");
+    cv.width = W; cv.height = H;
+    updateBoardInfo();
+  }
 
   // 配置パッドで決めた端・角（アンカー）から、画像の大きさに合わせて座標を出す。
   // 画像が幅（高さ）いっぱいのときは余白を付けない。付けると逆向きに食い込んでしまうため。
@@ -340,17 +374,25 @@
     var url = URL.createObjectURL(file);
     var im = new Image();
     im.onload = function(){
+      var asBoard = boardMode === "image" && !imageBoardSet;
+      if (asBoard){
+        imageBoardSet = true;
+        setBoard(im.naturalWidth, im.naturalHeight);
+        fillBase();
+      }
       temp = {
         img: im, name: file.name,
-        sizeMode: "contain", pct: 50, basis: "height",
+        sizeMode: asBoard ? "cover" : "contain", pct: 50, basis: "height",
         x: 0, y: 0, flip: false, ax: 0.5, ay: 0.5
       };
       var sz = tempSize();
       var p0 = anchorPos(sz.w, sz.h);
       temp.x = p0.x;
       temp.y = p0.y;
-      setSeg("sizeSeg", "data-size", "contain");
-      $("fileMsg").textContent = file.name + "（" + im.naturalWidth + "×" + im.naturalHeight + "px）を仮置きしました";
+      setSeg("sizeSeg", "data-size", asBoard ? "cover" : "contain");
+      $("fileMsg").textContent = file.name + "（" + im.naturalWidth + "×" + im.naturalHeight + "px）を仮置きしました" +
+        (asBoard ? "。この画像が台紙（" + W + "×" + H + "px）になりました。合成すると背景になります" : "") +
+        (asBoard && W * H > 20000000 ? "。大きい画像です。スマホでは処理に時間がかかることがあります" : "");
       $("bakeMsg").textContent = "";
       show("adjustCard", true);
       show("bakeCard", true);
@@ -380,7 +422,7 @@
       return;
     }
     var type = asJpeg ? "image/jpeg" : "image/png";
-    var name = asJpeg ? "samune.jpg" : "samune.png";
+    var name = asJpeg ? "gousei.jpg" : "gousei.png";
     base.toBlob(function(blob){
       if (!blob){
         $("msg").textContent = "保存に失敗しました。";
@@ -396,7 +438,7 @@
       document.body.appendChild(a);
       a.click();
       a.remove();
-      $("msg").textContent = name + " を保存しました（1280×720px）";
+      $("msg").textContent = name + " を保存しました（" + W + "×" + H + "px）";
     }, type, 0.92);
   }
 
@@ -420,6 +462,20 @@
     });
   }
 
+  segWire("boardSeg", "data-board", function(v){
+    if (v === "image"){
+      boardMode = "image";
+      imageBoardSet = false;
+      updateBoardInfo();
+      resetAll("「画像に合わせる」を選びました。次に読み込んだ画像が台紙になります");
+    } else {
+      boardMode = "fixed";
+      imageBoardSet = false;
+      var parts = v.split("x");
+      setBoard(parseInt(parts[0], 10), parseInt(parts[1], 10));
+      resetAll("台紙を " + W + "×" + H + " にして、最初からやり直しました");
+    }
+  });
   segWire("bgSeg", "data-bg", function(v){
     bg = v;
     resetAll("台紙を" + (v === "black" ? "黒" : "白") + "にして、最初からやり直しました");
@@ -522,6 +578,7 @@
 
   $("savePng").addEventListener("click", function(){ save(false); });
   $("saveJpg").addEventListener("click", function(){ save(true); });
+  updateBoardInfo();
 
   document.addEventListener("keydown", function(e){
     if (!temp) return;
