@@ -200,22 +200,25 @@
         <button data-amt="0.16">大きく</button>
       </div>
     </div>
-    <div class="row">
-      <label>透明度</label>
-      <div class="seg" id="dOpSeg">
-        <button data-op="keep" class="on">そのまま</button>
-        <button data-op="1">現れる（100%）</button>
-        <button data-op="0.5">半分（50%）</button>
-        <button data-op="0">消える（0%）</button>
+    <details style="margin-bottom:10px;">
+      <summary style="font-size:14px; color:var(--sub); cursor:pointer; padding:6px 0;">その他の変化（透明度・反転）</summary>
+      <div class="row" style="margin-top:8px;">
+        <label>透明度</label>
+        <div class="seg" id="dOpSeg">
+          <button data-op="keep" class="on">そのまま</button>
+          <button data-op="1">現れる（100%）</button>
+          <button data-op="0.5">半分（50%）</button>
+          <button data-op="0">消える（0%）</button>
+        </div>
       </div>
-    </div>
-    <div class="row">
-      <label>左右反転</label>
-      <div class="seg" id="dFlipSeg">
-        <button data-dflip="0" class="on">しない</button>
-        <button data-dflip="1">する（この時間でパタンと）</button>
+      <div class="row">
+        <label>左右反転</label>
+        <div class="seg" id="dFlipSeg">
+          <button data-dflip="0" class="on">しない</button>
+          <button data-dflip="1">する（この時間でパタンと）</button>
+        </div>
       </div>
-    </div>
+    </details>
 
     <h3>その場の動き・変形（このステップの時間だけ）</h3>
     <div class="row">
@@ -243,6 +246,7 @@
         <button data-dur="5">5秒</button>
       </div>
     </div>
+    <div class="info" id="draftSummary" style="color:var(--text);">下書き: そのまま待つ（2秒）</div>
     <div class="row">
       <button id="addStepBtn" class="primary" style="flex:1;">ステップを追加する</button>
     </div>
@@ -528,7 +532,10 @@
     });
     if (m === "play") playStart = performance.now();
   }
-  function draftTouch(){ if (mode === "play") playStart = performance.now(); }
+  function draftTouch(){
+    $("draftSummary").textContent = "下書き: " + stepText(draftStep());
+    if (mode === "play") playStart = performance.now();
+  }
 
   function updateUI(){
     $("sizeInfo").textContent = "画面: " + W + "×" + H + "px／合計: " + totalDur(steps) + "秒";
@@ -638,6 +645,7 @@
     setSegUI("dOpSeg", "data-op", "keep");
     setSegUI("dFlipSeg", "data-dflip", "0");
     setSegUI("dFxSeg", "data-fx", "none");
+    $("draftSummary").textContent = "下書き: " + stepText(draftStep());
   }
 
   // ---- ステップ操作 ----
