@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>動く画像メーカー（仮）— 画像に動きを付けてWebMで書き出す</title>
+<style>
+  :root{
+    --bg:#171a21; --panel:#21252f; --panel2:#282d3a; --line:#3a4152;
+    --text:#eef1f6; --sub:#9aa5b5; --accent:#ffd34d; --accent-text:#231a00;
+    --btn:#39415a; --btn-text:#eef1f6;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--text);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;}
+  .wrap{max-width:720px; margin:0 auto; padding:16px 14px 40px;}
+  h1{font-size:20px; margin:6px 0 2px;}
+  .lead{color:var(--sub); font-size:13px; margin:0 0 14px; line-height:1.6;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px;}
+  .card h2{font-size:14px; margin:0 0 10px; color:var(--sub); font-weight:600; letter-spacing:.05em;}
+  .card h3{font-size:13px; margin:14px 0 8px; color:var(--sub); font-weight:600;}
+  .card h3:first-of-type{margin-top:2px;}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
+  .row:last-child{margin-bottom:0;}
+  button{font-size:16px; padding:12px 16px; border-radius:10px; border:1px solid var(--line);
+    background:var(--btn); color:var(--btn-text); cursor:pointer;}
+  button:active{transform:scale(.97);}
+  button.primary{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  button:disabled{opacity:.45; cursor:default;}
+  button.on{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  label{font-size:14px; color:var(--sub);}
+  .seg{display:flex; gap:8px; flex-wrap:wrap;}
+  .seg button{font-size:14px; padding:9px 14px; border-radius:999px;}
+  .seg button.on{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  .pad{display:grid; grid-template-columns:repeat(3,52px); gap:6px;}
+  .pad button{padding:10px 0; font-size:16px;}
+  .pad button.on{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  .prevbox{border:1px solid var(--line); border-radius:10px; padding:10px;
+    background:repeating-conic-gradient(#2b303d 0 25%, #22262f 0 50%) 0 0/24px 24px;
+    text-align:center;}
+  .prevbox canvas{max-width:100%; max-height:45vh; width:auto; height:auto; display:block; margin:0 auto;}
+  .prevbox video{max-width:100%; max-height:45vh; height:auto;}
+  .sticky{position:sticky; top:8px; z-index:10; box-shadow:0 6px 18px rgba(0,0,0,.35);}
+  .msg{min-height:20px; font-size:13px; color:var(--accent); margin-top:8px;}
+  .info{font-size:13px; color:var(--sub); margin-top:8px; min-height:18px; line-height:1.6;}
+  .warn{font-size:13px; color:var(--accent); margin-top:8px; line-height:1.6;}
+  .foot{color:var(--sub); font-size:12px; line-height:1.7;}
+  .foot b{color:var(--text);}
+  .stepitem{display:flex; gap:10px; align-items:center; background:var(--panel2);
+    border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px;}
+  .stepitem .txt{flex:1; font-size:14px; line-height:1.5;}
+  .stepitem .num{color:var(--accent); font-weight:700;}
+  .stepitem button{font-size:13px; padding:8px 12px;}
+  input[type="file"]{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🖼️ 動く画像メーカー（仮）</h1>
+  <p class="lead">読み込んだ画像に、変化のステップをつないで動きを付け、WebM動画として書き出す道具です。スタンプやキャラ絵、ロゴなどの素材を、ショート動画や配信で使える「動く素材」にするためのものです。</p>
+
+  <div class="card sticky">
+    <h2>プレビュー</h2>
+    <div class="prevbox"><canvas id="cv" width="1080" height="1920"></canvas></div>
+    <div class="row" style="margin-top:10px;">
+      <button id="playBtn">▶ 再生する</button>
+      <span class="info" id="sizeInfo" style="margin-top:0;"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1. 画像を読み込む</h2>
+    <div class="row">
+      <label for="fileIn" style="display:inline-block;">
+        <button id="pickBtn" type="button">画像を選ぶ</button>
+      </label>
+      <input type="file" id="fileIn" accept="image/*">
+      <span class="info" id="imgInfo" style="margin-top:0;">まだ読み込んでいません</span>
+    </div>
+    <div class="info">透過PNGがおすすめです。画像はこの端末の中だけで処理され、外部に送信されません。</div>
+  </div>
+
+  <div class="card">
+    <h2>2. 全体の設定（全部に効きます）</h2>
+    <div class="row">
+      <label>画面サイズ</label>
+      <div class="seg" id="sizeSeg">
+        <button data-size="1080x1920" class="on">縦 1080×1920（Shorts）</button>
+        <button data-size="720x1280">縦 720×1280</button>
+        <button data-size="1920x1080">横 1920×1080</button>
+        <button data-size="1280x720">横 1280×720</button>
+        <button data-size="1080x1080">正方形 1080×1080</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>背景（書き出し）</label>
+      <div class="seg" id="bgSeg">
+        <button data-bg="alpha" class="on">透過</button>
+        <button data-bg="#00ff00">緑（クロマキー）</button>
+        <button data-bg="#0000ff">青（クロマキー）</button>
+        <button data-bg="#ff00ff">マゼンタ（クロマキー）</button>
+        <button data-bg="#000000">黒</button>
+        <button data-bg="#ffffff">白</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>フェードイン・アウト</label>
+      <div class="seg" id="fadeSeg">
+        <button data-fade="0" class="on">なし</button>
+        <button data-fade="15">短め</button>
+        <button data-fade="25">ふつう</button>
+        <button data-fade="40">長め</button>
+      </div>
+    </div>
+    <div class="info">透過が編集アプリで効かないときは、クロマキー用の色で書き出して、編集側で色を抜いてください。</div>
+  </div>
+
+  <div class="card">
+    <h2>3. スタートの状態</h2>
+    <div class="row">
+      <label>大きさ</label>
+      <div class="seg" id="startSizeSeg">
+        <button data-ssize="0.55">小さい</button>
+        <button data-ssize="0.75">少し小さい</button>
+        <button data-ssize="1" class="on">ふつう</button>
+        <button data-ssize="1.25">少し大きい</button>
+        <button data-ssize="1.5">大きい</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>位置</label>
+      <div class="pad" id="startPosPad">
+        <button data-pos="0">↖</button><button data-pos="1">↑</button><button data-pos="2">↗</button>
+        <button data-pos="3">←</button><button data-pos="4" class="on">・</button><button data-pos="5">→</button>
+        <button data-pos="6">↙</button><button data-pos="7">↓</button><button data-pos="8">↘</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>傾き</label>
+      <div class="seg" id="startRotSeg">
+        <button data-srot="-25">左へ大きく</button>
+        <button data-srot="-12">左へ少し</button>
+        <button data-srot="0" class="on">なし</button>
+        <button data-srot="12">右へ少し</button>
+        <button data-srot="25">右へ大きく</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>左右反転</label>
+      <div class="seg" id="startFlipSeg">
+        <button data-sflip="1" class="on">そのまま</button>
+        <button data-sflip="-1">反転する</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>4. ステップ（変化をつなぎます）</h2>
+
+    <h3>変化の内容</h3>
+    <div class="row">
+      <label>サイズ</label>
+      <div class="seg" id="dSizeSeg">
+        <button data-dsize="0.5">ぎゅっと縮む</button>
+        <button data-dsize="0.75">少し縮む</button>
+        <button data-dsize="1" class="on">そのまま</button>
+        <button data-dsize="1.3">少し広がる</button>
+        <button data-dsize="1.65">ぐっと広がる</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>傾き</label>
+      <div class="seg" id="dRotSeg">
+        <button data-drot="-25">左へ大きく</button>
+        <button data-drot="-12">左へ少し</button>
+        <button data-drot="0" class="on">なし</button>
+        <button data-drot="12">右へ少し</button>
+        <button data-drot="25">右へ大きく</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>移動</label>
+      <div class="pad" id="dMovePad">
+        <button data-dir="-1,-1">↖</button><button data-dir="0,-1">↑</button><button data-dir="1,-1">↗</button>
+        <button data-dir="-1,0">←</button><button data-dir="0,0" class="on">・</button><button data-dir="1,0">→</button>
+        <button data-dir="-1,1">↙</button><button data-dir="0,1">↓</button><button data-dir="1,1">↘</button>
+      </div>
+      <div class="seg" id="dMoveAmtSeg">
+        <button data-amt="0.07" class="on">少し</button>
+        <button data-amt="0.16">大きく</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>透明度</label>
+      <div class="seg" id="dOpSeg">
+        <button data-op="keep" class="on">そのまま</button>
+        <button data-op="1">現れる（100%）</button>
+        <button data-op="0.5">半分（50%）</button>
+        <button data-op="0">消える（0%）</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>左右反転</label>
+      <div class="seg" id="dFlipSeg">
+        <button data-dflip="0" class="on">しない</button>
+        <button data-dflip="1">する（この時間でパタンと）</button>
+      </div>
+    </div>
+
+    <h3>その場の動き・変形（このステップの時間だけ）</h3>
+    <div class="row">
+      <div class="seg" id="dFxSeg">
+        <button data-fx="none" class="on">なし</button>
+        <button data-fx="wave">波うち</button>
+        <button data-fx="jelly">ぷるぷる</button>
+        <button data-fx="spin">ぐるぐる</button>
+        <button data-fx="sway">ゆらゆら</button>
+        <button data-fx="bounce">跳ねる</button>
+        <button data-fx="pulse">ドキドキ</button>
+        <button data-fx="float">ふわふわ</button>
+        <button data-fx="sparkle">キラキラ</button>
+      </div>
+    </div>
+
+    <h3>このステップの時間</h3>
+    <div class="row">
+      <div class="seg" id="dDurSeg">
+        <button data-dur="0.5">0.5秒</button>
+        <button data-dur="1">1秒</button>
+        <button data-dur="1.5">1.5秒</button>
+        <button data-dur="2" class="on">2秒</button>
+        <button data-dur="3">3秒</button>
+        <button data-dur="5">5秒</button>
+      </div>
+    </div>
+    <div class="row">
+      <button id="addStepBtn" class="primary" style="flex:1;">ステップを追加する</button>
+    </div>
+    <div class="row">
+      <button id="returnStepBtn" style="flex:1;">スタートに戻るステップを追加</button>
+    </div>
+    <div class="info" id="stepMsg">ステップは最大8つまで。追加すると、プレビューは「いまのゴールの状態」を表示します。</div>
+
+    <h3>つないだステップ</h3>
+    <div id="stepList"></div>
+    <div class="info" id="chainInfo">まだステップがありません。</div>
+    <div class="warn" id="loopWarn" style="display:none;">終わりの状態がスタートと違います。このまま書き出すと、ループ再生のつなぎ目でスタートの状態へ戻ります。気になるときは最後に「スタートに戻る」ステップを足してください。</div>
+    <div class="row">
+      <button id="clearStepsBtn">ステップを全部消す</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>5. WebMで書き出す</h2>
+    <div class="row">
+      <button id="exportBtn" class="primary" style="flex:1;" disabled>WebMで書き出す</button>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="prevbox" id="resultBox" style="display:none; margin-top:10px;">
+      <div class="foot" style="margin-bottom:8px;">書き出した動画（スマホでは長押しでも保存できます）</div>
+      <video id="resultVideo" controls loop playsinline></video>
+      <div class="row" style="margin-top:10px; justify-content:center;">
+        <a id="dlLink" href="#" download="ugoku-gazou.webm"><button>ファイルとして保存</button></a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card foot">
+    <b>使い方・注意</b><br>
+    ・ステップの変化は、そのステップの時間いっぱいを使って、なめらかに進みます。サイズ・傾き・移動・透明度は次のステップへ引き継がれます。<br>
+    ・「その場の動き・変形」はそのステップの時間だけ効いて、終わると元の状態に戻ります。「ぐるぐる」はその時間で1回転します。<br>
+    ・書き出しは、スタートから最後のステップまでを1回分そのまま録画する方式です。長さはステップの合計時間になります。<br>
+    ・画面サイズや背景を変えても、作ったステップは消えません（位置や大きさは画面に合わせて計算し直します）。<br>
+    ・透過WebMの書き出しと再生は、ブラウザによって対応状況が違います。Chrome（Android・PC）推奨です。編集アプリ側で透過が効くかは、アプリと版によります。<br>
+    ・画像はブラウザの中でだけ処理され、外部に送信されることはありません。
+  </div>
+
+  <p class="foot"><a href="../../index.html" style="color:var(--sub);">← カラの道具箱へ戻る</a>　／　<a href="../../LICENSE" style="color:var(--sub);">MIT License</a></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var cv = $("cv"), ctx = cv.getContext("2d");
+
+  var W = 1080, H = 1920;
+  var bg = "alpha";
+  var fadePct = 0;
+  var img = null, iw = 0, ih = 0;
+
+  // スタートの状態
+  var startSize = 1, startPos = 4, startRot = 0, startFlip = 1;
+
+  // 下書きステップの選択
+  var dSize = 1, dRot = 0, dDirX = 0, dDirY = 0, dAmt = 0.07, dOp = null, dFlip = 0, dFx = "none", dDur = 2;
+
+  var steps = [];       // {size, rot, dirX, dirY, amt, op, flip, fx, dur, ret}
+  var mode = "still";   // "play" | "still"
+  var playStart = performance.now();
+  var recording = false;
+  var resultUrl = null;
+
+  var MAX_STEPS = 8;
+
+  function clamp01(v){ return v < 0 ? 0 : v > 1 ? 1 : v; }
+  function smooth01(t){ t = clamp01(t); return t * t * (3 - 2 * t); }
+  function lerp(a, b, t){ return a + (b - a) * t; }
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+  function minDim(){ return Math.min(W, H); }
+  function fitScale(){
+    if (!iw) return 1;
+    return Math.min((W * 0.88) / iw, (H * 0.88) / ih);
+  }
+  function startCenter(){
+    var col = startPos % 3, row = Math.floor(startPos / 3);
+    return { x: W * (0.3 + 0.2 * col), y: H * (0.3 + 0.2 * row) };
+  }
+  function startState(){
+    return { scale: startSize, angle: startRot, dxF: 0, dyF: 0, opacity: 1, flip: startFlip };
+  }
+  function foldStates(){
+    var states = [startState()];
+    for (var k = 0; k < steps.length; k++){
+      var st = steps[k], s = clone(states[k]);
+      if (st.ret){
+        s = startState();
+      } else {
+        s.scale *= st.size;
+        s.angle += st.rot;
+        var diag = (st.dirX !== 0 && st.dirY !== 0) ? 0.7071 : 1;
+        s.dxF += st.dirX * st.amt * diag;
+        s.dyF += st.dirY * st.amt * diag;
+        if (st.op != null) s.opacity = st.op;
+        if (st.flip) s.flip = -s.flip;
+      }
+      states.push(s);
+    }
+    return states;
+  }
+  function totalDur(){
+    return steps.reduce(function(a, s){ return a + s.dur; }, 0);
+  }
+
+  var FX_NAMES = { wave: "波うち", jelly: "ぷるぷる", spin: "ぐるぐる", sway: "ゆらゆら",
+    bounce: "跳ねる", pulse: "ドキドキ", float: "ふわふわ", sparkle: "キラキラ" };
+
+  function fxAt(step, q){
+    var fx = { dxF: 0, dyF: 0, rot: 0, sx: 1, sy: 1, sMul: 1, wave: false, sparkle: false };
+    if (!step || step.ret) return fx;
+    var dur = step.dur;
+    var cyc = Math.max(1, Math.round(dur));
+    if (step.fx === "wave"){ fx.wave = true; fx.wavePhase = q * Math.PI * 2 * cyc; }
+    else if (step.fx === "jelly"){
+      var env = Math.sin(Math.PI * q), s = Math.sin(q * Math.PI * 2 * cyc);
+      fx.sx = 1 + 0.16 * s * env; fx.sy = 1 - 0.13 * s * env;
+    }
+    else if (step.fx === "spin"){ fx.rot = q * Math.PI * 2; }
+    else if (step.fx === "sway"){ fx.rot = Math.sin(q * Math.PI * 2 * cyc) * 0.11; }
+    else if (step.fx === "bounce"){ fx.dyF = -Math.abs(Math.sin(q * Math.PI * cyc)) * 0.11; }
+    else if (step.fx === "pulse"){
+      var b = Math.max(0, Math.sin(q * Math.PI * 2 * cyc));
+      fx.sMul = 1 + 0.12 * b * b;
+    }
+    else if (step.fx === "float"){
+      fx.dyF = Math.sin(q * Math.PI * 2 * Math.max(1, Math.round(dur / 2))) * 0.045;
+    }
+    else if (step.fx === "sparkle"){ fx.sparkle = true; }
+    return fx;
+  }
+
+  function drawSparkles(cx, cy, dispW, dispH, alpha, now){
+    ctx.save();
+    ctx.fillStyle = "#ffffff";
+    for (var i = 0; i < 14; i++){
+      var hx = Math.sin(i * 127.1) * 43758.5453, hy = Math.sin(i * 311.7) * 12543.123;
+      var rx = (hx - Math.floor(hx)) * 1.24 - 0.62;
+      var ry = (hy - Math.floor(hy)) * 1.24 - 0.62;
+      var tw = Math.max(0, Math.sin(now * 0.005 + i * 1.93));
+      if (tw <= 0.05) continue;
+      var r = minDim() * 0.022 * (0.4 + tw);
+      var x = cx + rx * dispW, y = cy + ry * dispH;
+      ctx.globalAlpha = alpha * tw;
+      ctx.beginPath();
+      ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.28, y - r * 0.28);
+      ctx.lineTo(x + r, y); ctx.lineTo(x + r * 0.28, y + r * 0.28);
+      ctx.lineTo(x, y + r); ctx.lineTo(x - r * 0.28, y + r * 0.28);
+      ctx.lineTo(x - r, y); ctx.lineTo(x - r * 0.28, y - r * 0.28);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function renderAt(tSec, now){
+    ctx.clearRect(0, 0, W, H);
+    if (bg !== "alpha"){
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (!img){
+      ctx.save();
+      ctx.fillStyle = "#9aa5b5";
+      ctx.font = "600 " + Math.round(minDim() * 0.045) + "px sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("画像を選んでください", W / 2, H / 2);
+      ctx.restore();
+      return;
+    }
+    var states = foldStates();
+    var total = totalDur();
+    var S, fx, flipFactor, env = 1;
+    if (!steps.length || tSec <= 0){
+      S = states[0]; fx = fxAt(null, 0); flipFactor = S.flip;
+    } else if (tSec >= total){
+      S = states[states.length - 1]; fx = fxAt(null, 0); flipFactor = S.flip;
+    } else {
+      var acc = 0, k = 0;
+      while (k < steps.length - 1 && tSec >= acc + steps[k].dur){ acc += steps[k].dur; k++; }
+      var st = steps[k], q = clamp01((tSec - acc) / st.dur), e = smooth01(q);
+      var A = states[k], B = states[k + 1];
+      S = {
+        scale: lerp(A.scale, B.scale, e),
+        angle: lerp(A.angle, B.angle, e),
+        dxF: lerp(A.dxF, B.dxF, e),
+        dyF: lerp(A.dyF, B.dyF, e),
+        opacity: lerp(A.opacity, B.opacity, e),
+        flip: B.flip
+      };
+      flipFactor = st.flip ? A.flip * Math.cos(Math.PI * e) : A.flip;
+      fx = fxAt(st, q);
+    }
+    if (fadePct > 0 && total > 0 && steps.length){
+      var f = fadePct / 100, p = clamp01(tSec / total);
+      env = Math.min(smooth01(p / f), smooth01((1 - p) / f));
+    }
+    var c0 = startCenter(), md = minDim(), fit = fitScale();
+    var X = c0.x + (S.dxF + fx.dxF) * md;
+    var Y = c0.y + (S.dyF + fx.dyF) * md;
+    var sc = fit * S.scale;
+    ctx.save();
+    ctx.globalAlpha = S.opacity * env;
+    ctx.translate(X, Y);
+    ctx.rotate(S.angle * Math.PI / 180 + fx.rot);
+    ctx.scale(sc * fx.sx * fx.sMul * flipFactor, sc * fx.sy * fx.sMul);
+    if (fx.wave){
+      var N = 28, sw = iw / N;
+      var ampLocal = (md * 0.02) / Math.max(0.001, sc * fx.sy * fx.sMul);
+      for (var j = 0; j < N; j++){
+        var dy = Math.sin((j / N) * Math.PI * 3 + fx.wavePhase) * ampLocal;
+        ctx.drawImage(img, j * sw, 0, sw + 1, ih, -iw / 2 + j * sw, -ih / 2 + dy, sw + 1, ih);
+      }
+    } else {
+      ctx.drawImage(img, -iw / 2, -ih / 2);
+    }
+    ctx.restore();
+    if (fx.sparkle && S.opacity > 0){
+      drawSparkles(X, Y, iw * sc, ih * sc, S.opacity * env, now);
+    }
+  }
+
+  function drawLoop(now){
+    var total = totalDur();
+    if (mode === "play" && steps.length && total > 0){
+      var t = ((now - playStart) / 1000) % total;
+      renderAt(t, now);
+    } else if (steps.length){
+      renderAt(total, now);
+    } else {
+      renderAt(0, now);
+    }
+    requestAnimationFrame(drawLoop);
+  }
+
+  // ---- UI更新 ----
+  var SIZE_TXT = { "0.5": "ぎゅっと縮む", "0.75": "少し縮む", "1.3": "少し広がる", "1.65": "ぐっと広がる" };
+  var ROT_TXT = { "-25": "左へ大きく傾く", "-12": "左へ少し傾く", "12": "右へ少し傾く", "25": "右へ大きく傾く" };
+  var DIR_TXT = { "0,-1": "上", "0,1": "下", "-1,0": "左", "1,0": "右",
+    "-1,-1": "左上", "1,-1": "右上", "-1,1": "左下", "1,1": "右下" };
+  var OP_TXT = { "1": "現れる", "0.5": "半分の透明度に", "0": "消える" };
+
+  function stepText(st){
+    if (st.ret) return "スタートに戻る（" + st.dur + "秒）";
+    var parts = [];
+    if (SIZE_TXT[String(st.size)]) parts.push(SIZE_TXT[String(st.size)]);
+    if (ROT_TXT[String(st.rot)]) parts.push(ROT_TXT[String(st.rot)]);
+    if (st.dirX !== 0 || st.dirY !== 0){
+      parts.push(DIR_TXT[st.dirX + "," + st.dirY] + "へ" + (st.amt > 0.1 ? "大きく" : "少し") + "移動");
+    }
+    if (st.op != null) parts.push(OP_TXT[String(st.op)]);
+    if (st.flip) parts.push("左右反転");
+    var main = parts.length ? parts.join("・") : "そのまま待つ";
+    if (st.fx !== "none") main += " ＋" + FX_NAMES[st.fx];
+    return main + "（" + st.dur + "秒）";
+  }
+
+  function sameState(a, b){
+    return Math.abs(a.scale - b.scale) < 0.001 && Math.abs(a.angle - b.angle) < 0.01 &&
+      Math.abs(a.dxF - b.dxF) < 0.001 && Math.abs(a.dyF - b.dyF) < 0.001 &&
+      Math.abs(a.opacity - b.opacity) < 0.001 && a.flip === b.flip;
+  }
+
+  function updateUI(){
+    $("sizeInfo").textContent = "画面: " + W + "×" + H + "px／合計: " + totalDur() + "秒";
+    var list = $("stepList");
+    list.innerHTML = "";
+    steps.forEach(function(st, i){
+      var div = document.createElement("div");
+      div.className = "stepitem";
+      var txt = document.createElement("div");
+      txt.className = "txt";
+      txt.innerHTML = "<span class='num'>" + (i + 1) + ".</span> " + stepText(st);
+      var del = document.createElement("button");
+      del.textContent = "消す";
+      del.addEventListener("click", function(){
+        steps.splice(i, 1);
+        mode = "still"; $("playBtn").textContent = "▶ 再生する";
+        updateUI();
+      });
+      div.appendChild(txt); div.appendChild(del);
+      list.appendChild(div);
+    });
+    if (steps.length){
+      var states = foldStates();
+      $("chainInfo").textContent = "合計 " + totalDur() + "秒／" + steps.length + "ステップ";
+      $("loopWarn").style.display = sameState(states[states.length - 1], states[0]) ? "none" : "block";
+    } else {
+      $("chainInfo").textContent = "まだステップがありません。";
+      $("loopWarn").style.display = "none";
+    }
+    $("addStepBtn").disabled = steps.length >= MAX_STEPS;
+    $("returnStepBtn").disabled = steps.length >= MAX_STEPS;
+    $("exportBtn").disabled = !img || !steps.length || recording;
+    if (steps.length >= MAX_STEPS) $("stepMsg").textContent = "ステップは最大8つまでです。";
+  }
+
+  // ---- セグメント配線 ----
+  function wire(id, attr, fn){
+    Array.prototype.forEach.call($(id).querySelectorAll("button"), function(btn){
+      btn.addEventListener("click", function(){
+        Array.prototype.forEach.call($(id).querySelectorAll("button"), function(b){ b.classList.remove("on"); });
+        btn.classList.add("on");
+        fn(btn.getAttribute(attr));
+      });
+    });
+  }
+  wire("sizeSeg", "data-size", function(v){
+    var p = v.split("x");
+    W = parseInt(p[0], 10); H = parseInt(p[1], 10);
+    cv.width = W; cv.height = H;
+    updateUI();
+  });
+  wire("bgSeg", "data-bg", function(v){ bg = v; });
+  wire("fadeSeg", "data-fade", function(v){ fadePct = parseInt(v, 10); });
+  wire("startSizeSeg", "data-ssize", function(v){ startSize = parseFloat(v); mode = "still"; $("playBtn").textContent = "▶ 再生する"; });
+  wire("startPosPad", "data-pos", function(v){ startPos = parseInt(v, 10); });
+  wire("startRotSeg", "data-srot", function(v){ startRot = parseInt(v, 10); });
+  wire("startFlipSeg", "data-sflip", function(v){ startFlip = parseInt(v, 10); });
+  wire("dSizeSeg", "data-dsize", function(v){ dSize = parseFloat(v); });
+  wire("dRotSeg", "data-drot", function(v){ dRot = parseInt(v, 10); });
+  wire("dMovePad", "data-dir", function(v){
+    var p = v.split(",");
+    dDirX = parseInt(p[0], 10); dDirY = parseInt(p[1], 10);
+  });
+  wire("dMoveAmtSeg", "data-amt", function(v){ dAmt = parseFloat(v); });
+  wire("dOpSeg", "data-op", function(v){ dOp = v === "keep" ? null : parseFloat(v); });
+  wire("dFlipSeg", "data-dflip", function(v){ dFlip = parseInt(v, 10); });
+  wire("dFxSeg", "data-fx", function(v){ dFx = v; });
+  wire("dDurSeg", "data-dur", function(v){ dDur = parseFloat(v); });
+
+  // ---- 画像読み込み ----
+  $("pickBtn").addEventListener("click", function(e){
+    e.preventDefault(); e.stopPropagation();
+    $("fileIn").click();
+  });
+  $("fileIn").addEventListener("change", function(){
+    var f = $("fileIn").files && $("fileIn").files[0];
+    if (!f) return;
+    var url = URL.createObjectURL(f);
+    var im = new Image();
+    im.onload = function(){
+      img = im; iw = im.naturalWidth; ih = im.naturalHeight;
+      $("imgInfo").textContent = "読み込みました（" + iw + "×" + ih + "px）";
+      mode = "still"; $("playBtn").textContent = "▶ 再生する";
+      updateUI();
+    };
+    im.onerror = function(){
+      $("imgInfo").textContent = "読み込めませんでした。別の画像で試してください。";
+    };
+    im.src = url;
+  });
+
+  // ---- ステップ操作 ----
+  $("addStepBtn").addEventListener("click", function(){
+    if (steps.length >= MAX_STEPS) return;
+    steps.push({ size: dSize, rot: dRot, dirX: dDirX, dirY: dDirY, amt: dAmt,
+      op: dOp, flip: dFlip, fx: dFx, dur: dDur, ret: false });
+    mode = "still"; $("playBtn").textContent = "▶ 再生する";
+    updateUI();
+  });
+  $("returnStepBtn").addEventListener("click", function(){
+    if (steps.length >= MAX_STEPS) return;
+    steps.push({ size: 1, rot: 0, dirX: 0, dirY: 0, amt: 0.07, op: null, flip: 0,
+      fx: "none", dur: dDur, ret: true });
+    mode = "still"; $("playBtn").textContent = "▶ 再生する";
+    updateUI();
+  });
+  $("clearStepsBtn").addEventListener("click", function(){
+    steps = [];
+    mode = "still"; $("playBtn").textContent = "▶ 再生する";
+    updateUI();
+  });
+  $("playBtn").addEventListener("click", function(){
+    if (mode === "play"){
+      mode = "still";
+      $("playBtn").textContent = "▶ 再生する";
+    } else {
+      if (!steps.length){
+        $("stepMsg").textContent = "先にステップを追加してください。";
+        return;
+      }
+      mode = "play";
+      playStart = performance.now();
+      $("playBtn").textContent = "⏸ 止めて最後の状態を見る";
+    }
+  });
+
+  // ---- 書き出し ----
+  $("exportBtn").addEventListener("click", function(){
+    if (recording || !img || !steps.length) return;
+    if (!window.MediaRecorder || !cv.captureStream){
+      $("msg").textContent = "このブラウザではWebM書き出しに対応していません。Chromeで開いてください。";
+      return;
+    }
+    var mime = "";
+    ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].forEach(function(m){
+      if (!mime && window.MediaRecorder.isTypeSupported(m)) mime = m;
+    });
+    if (!mime){
+      $("msg").textContent = "このブラウザではWebM書き出しに対応していません。Chromeで開いてください。";
+      return;
+    }
+    var total = totalDur();
+    recording = true;
+    $("exportBtn").disabled = true;
+    $("msg").textContent = "書き出し中…（スタートから最後までを録画しています）";
+    mode = "play";
+    playStart = performance.now();
+    var stream = cv.captureStream(30);
+    var rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8000000 });
+    var chunks = [];
+    rec.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = function(){
+      recording = false;
+      mode = "still";
+      $("playBtn").textContent = "▶ 再生する";
+      var blob = new Blob(chunks, { type: "video/webm" });
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+      resultUrl = URL.createObjectURL(blob);
+      $("resultVideo").src = resultUrl;
+      $("dlLink").href = resultUrl;
+      $("resultBox").style.display = "block";
+      $("msg").textContent = "書き出しました（" + W + "×" + H + "px／" + total + "秒／" +
+        Math.max(1, Math.round(blob.size / 1024)) + "KB）";
+      updateUI();
+    };
+    rec.start(200);
+    setTimeout(function(){ if (rec.state !== "inactive") rec.stop(); }, total * 1000 + 60);
+  });
+
+  updateUI();
+  requestAnimationFrame(drawLoop);
+})();
+</script>
+</body>
+</html>
