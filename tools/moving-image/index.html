@@ -40,7 +40,7 @@
     text-align:center;}
   .prevbox canvas{max-width:100%; max-height:45vh; width:auto; height:auto; display:block; margin:0 auto;}
   .cvwrap{position:relative; display:inline-block; max-width:100%;}
-  #draftFrame{position:absolute; inset:0; border:4px dashed #35d465; border-radius:6px;
+  #draftFrame{position:absolute; border:4px dashed #35d465; border-radius:6px; box-sizing:border-box;
     display:none; pointer-events:none;}
   #draftFrame span{position:absolute; top:6px; left:6px; background:#35d465; color:#06280f;
     font-size:12px; font-weight:700; padding:2px 10px; border-radius:999px;}
@@ -69,13 +69,13 @@
     <div class="prevbox"><div class="cvwrap"><canvas id="cv" width="1080" height="1920"></canvas><div id="draftFrame"><span>下書き</span></div></div></div>
     <div class="row" style="margin-top:10px;">
       <div class="seg" id="pmodeSeg">
-        <button data-pmode="from">出発点</button>
+        <button data-pmode="from" id="fromBtn">出発点</button>
         <button data-pmode="to" class="on">着地点</button>
         <button data-pmode="play">全部再生</button>
       </div>
       <span class="info" id="sizeInfo" style="margin-top:0;"></span>
     </div>
-    <div class="info">緑の点線枠＝下書き（未追加）の部分です。「ステップを追加」を押すまで、書き出しには反映されません。</div>
+    <div class="info">緑の点線枠は画像の位置に沿って出ます。下書き（未追加）の区間の目印で、「ステップを追加」を押すまで書き出しには反映されません。静止画で画像が見えにくい時にも、位置を示すために出ます。</div>
   </div>
 
   <div class="card">
@@ -162,6 +162,7 @@
         <button data-sflip="-1">反転する</button>
       </div>
     </div>
+    <div class="warn" id="startLockNote" style="display:none;">いまは1ステップ目の出発点を維持しています。スタートの状態を変えたいときは、先に「ステップを全部消す」で消してください。</div>
   </div>
 
   <div class="card">
@@ -282,7 +283,8 @@
   <div class="card foot">
     <b>使い方・注意</b><br>
     ・ステップの変化は、そのステップの時間いっぱいを使って、なめらかに進みます。サイズ・傾き・移動・透明度は次のステップへ引き継がれます。<br>
-    ・プレビューは「出発点」「着地点」の静止画と「全部再生」の3つです。出発点＝設定中のステップが始まる状態、着地点＝終わる状態で、設定を変えると静止画もその場で変わります。全部再生では、下書き（未追加）のステップの間だけ緑の点線枠が表示され、その部分は「ステップを追加」を押すまで書き出しに反映されません。ステップを追加すると、設定は初期状態に戻ります。<br>
+    ・スタートの状態は、ステップを追加すると固定されます（全部のステップの出発点なので、途中では変えられません）。変えたいときはステップを全部消してください。2ステップ目以降の出発点は、常に前のステップの着地点です。<br>
+    ・プレビューは「出発点」「着地点」の静止画と「全部再生」の3つです。出発点＝設定中のステップが始まる状態、着地点＝終わる状態で、設定を変えると静止画もその場で変わります。全部再生では、下書き（未追加）のステップの間だけ、画像に沿って緑の点線枠が表示され、その部分は「ステップを追加」を押すまで書き出しに反映されません。ステップを追加すると、設定は初期状態に戻ります。静止画で、透明度やフェードのために画像が見えにくい時も、画像の位置に点線枠が出ます（枠自体は書き出しに含まれません）。<br>
     ・「その場の動き・変形」はそのステップの時間だけ効いて、終わると元の状態に戻ります。「ぐるぐる」はその時間で1回転します。<br>
     ・書き出しは、スタートから最後のステップまでを1回分そのまま録画する方式です。長さはステップの合計時間になります。<br>
     ・画面サイズや背景を変えても、作ったステップは消えません（位置や大きさは画面に合わせて計算し直します）。<br>
@@ -411,6 +413,8 @@
     ctx.restore();
   }
 
+  var lastGeom = null;
+
   function renderAt(tSec, now, list){
     ctx.clearRect(0, 0, W, H);
     if (bg !== "alpha"){
@@ -473,6 +477,13 @@
       ctx.drawImage(img, -iw / 2, -ih / 2);
     }
     ctx.restore();
+    lastGeom = {
+      x: X, y: Y,
+      w: iw * sc * Math.abs(fx.sx * fx.sMul * flipFactor),
+      h: ih * sc * Math.abs(fx.sy * fx.sMul),
+      rot: S.angle * Math.PI / 180 + fx.rot,
+      alpha: S.opacity * env
+    };
     if (fx.sparkle && S.opacity > 0){
       drawSparkles(X, Y, iw * sc, ih * sc, S.opacity * env, now);
     }
@@ -483,16 +494,32 @@
     var totalSteps = totalDur(steps);
     var total = totalDur(list);
     var frameEl = $("draftFrame");
+    var tagEl = frameEl.querySelector("span");
+    function placeFrame(tagOn){
+      if (!lastGeom){ frameEl.style.display = "none"; return; }
+      var sx = cv.clientWidth / W, sy = cv.clientHeight / H;
+      var wpx = lastGeom.w * sx, hpx = lastGeom.h * sy;
+      frameEl.style.width = wpx + "px";
+      frameEl.style.height = hpx + "px";
+      frameEl.style.left = (lastGeom.x * sx - wpx / 2) + "px";
+      frameEl.style.top = (lastGeom.y * sy - hpx / 2) + "px";
+      frameEl.style.transform = "rotate(" + (lastGeom.rot * 180 / Math.PI) + "deg)";
+      frameEl.style.display = "block";
+      tagEl.style.display = tagOn ? "block" : "none";
+    }
     if (recording || mode === "play"){
       var t = total > 0 ? ((now - playStart) / 1000) % total : 0;
       renderAt(t, now, list);
-      frameEl.style.display = (!recording && t >= totalSteps) ? "block" : "none";
+      if (!recording && t >= totalSteps){ placeFrame(true); }
+      else { frameEl.style.display = "none"; }
     } else if (mode === "from"){
       renderAt(totalSteps, now, list);
-      frameEl.style.display = "none";
+      if (lastGeom && lastGeom.alpha < 0.999){ placeFrame(false); }
+      else { frameEl.style.display = "none"; }
     } else {
       renderAt(total, now, list);
-      frameEl.style.display = "none";
+      if (lastGeom && lastGeom.alpha < 0.999){ placeFrame(false); }
+      else { frameEl.style.display = "none"; }
     }
     requestAnimationFrame(drawLoop);
   }
@@ -565,6 +592,12 @@
       $("chainInfo").textContent = "まだステップがありません。";
       $("loopWarn").style.display = "none";
     }
+    var startLocked = steps.length > 0;
+    ["startSizeSeg", "startPosPad", "startRotSeg", "startFlipSeg"].forEach(function(id){
+      Array.prototype.forEach.call($(id).querySelectorAll("button"), function(b){ b.disabled = startLocked; });
+    });
+    $("startLockNote").style.display = startLocked ? "block" : "none";
+    $("fromBtn").textContent = startLocked ? "前の着地点" : "出発点";
     $("addStepBtn").disabled = steps.length >= MAX_STEPS;
     $("returnStepBtn").disabled = steps.length >= MAX_STEPS;
     $("exportBtn").disabled = !img || !steps.length || recording;
