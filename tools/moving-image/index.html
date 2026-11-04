@@ -234,6 +234,9 @@
       </div>
     </div>
     <div class="row">
+      <button id="draftBtn" style="flex:1;">▶ いまの設定を再生して見る（まだ追加しない）</button>
+    </div>
+    <div class="row">
       <button id="addStepBtn" class="primary" style="flex:1;">ステップを追加する</button>
     </div>
     <div class="row">
@@ -268,6 +271,7 @@
   <div class="card foot">
     <b>使い方・注意</b><br>
     ・ステップの変化は、そのステップの時間いっぱいを使って、なめらかに進みます。サイズ・傾き・移動・透明度は次のステップへ引き継がれます。<br>
+    ・「いまの設定を再生して見る」を押すと、ステップを追加する前に、下書きの変化をいまの連結の続きとして再生して確認できます。設定を変えると頭から再生し直します。<br>
     ・「その場の動き・変形」はそのステップの時間だけ効いて、終わると元の状態に戻ります。「ぐるぐる」はその時間で1回転します。<br>
     ・書き出しは、スタートから最後のステップまでを1回分そのまま録画する方式です。長さはステップの合計時間になります。<br>
     ・画面サイズや背景を変えても、作ったステップは消えません（位置や大きさは画面に合わせて計算し直します）。<br>
@@ -297,6 +301,7 @@
 
   var steps = [];       // {size, rot, dirX, dirY, amt, op, flip, fx, dur, ret}
   var mode = "still";   // "play" | "still"
+  var draftPreview = false;
   var playStart = performance.now();
   var recording = false;
   var resultUrl = null;
@@ -320,10 +325,14 @@
   function startState(){
     return { scale: startSize, angle: startRot, dxF: 0, dyF: 0, opacity: 1, flip: startFlip };
   }
-  function foldStates(){
+  function draftStep(){
+    return { size: dSize, rot: dRot, dirX: dDirX, dirY: dDirY, amt: dAmt,
+      op: dOp, flip: dFlip, fx: dFx, dur: dDur, ret: false };
+  }
+  function foldStates(list){
     var states = [startState()];
-    for (var k = 0; k < steps.length; k++){
-      var st = steps[k], s = clone(states[k]);
+    for (var k = 0; k < list.length; k++){
+      var st = list[k], s = clone(states[k]);
       if (st.ret){
         s = startState();
       } else {
@@ -339,8 +348,8 @@
     }
     return states;
   }
-  function totalDur(){
-    return steps.reduce(function(a, s){ return a + s.dur; }, 0);
+  function totalDur(list){
+    return list.reduce(function(a, s){ return a + s.dur; }, 0);
   }
 
   var FX_NAMES = { wave: "波うち", jelly: "ぷるぷる", spin: "ぐるぐる", sway: "ゆらゆら",
@@ -392,7 +401,7 @@
     ctx.restore();
   }
 
-  function renderAt(tSec, now){
+  function renderAt(tSec, now, list){
     ctx.clearRect(0, 0, W, H);
     if (bg !== "alpha"){
       ctx.fillStyle = bg;
@@ -407,17 +416,17 @@
       ctx.restore();
       return;
     }
-    var states = foldStates();
-    var total = totalDur();
+    var states = foldStates(list);
+    var total = totalDur(list);
     var S, fx, flipFactor, env = 1;
-    if (!steps.length || tSec <= 0){
+    if (!list.length || tSec <= 0){
       S = states[0]; fx = fxAt(null, 0); flipFactor = S.flip;
     } else if (tSec >= total){
       S = states[states.length - 1]; fx = fxAt(null, 0); flipFactor = S.flip;
     } else {
       var acc = 0, k = 0;
-      while (k < steps.length - 1 && tSec >= acc + steps[k].dur){ acc += steps[k].dur; k++; }
-      var st = steps[k], q = clamp01((tSec - acc) / st.dur), e = smooth01(q);
+      while (k < list.length - 1 && tSec >= acc + list[k].dur){ acc += list[k].dur; k++; }
+      var st = list[k], q = clamp01((tSec - acc) / st.dur), e = smooth01(q);
       var A = states[k], B = states[k + 1];
       S = {
         scale: lerp(A.scale, B.scale, e),
@@ -430,7 +439,7 @@
       flipFactor = st.flip ? A.flip * Math.cos(Math.PI * e) : A.flip;
       fx = fxAt(st, q);
     }
-    if (fadePct > 0 && total > 0 && steps.length){
+    if (fadePct > 0 && total > 0 && list.length){
       var f = fadePct / 100, p = clamp01(tSec / total);
       env = Math.min(smooth01(p / f), smooth01((1 - p) / f));
     }
@@ -460,14 +469,15 @@
   }
 
   function drawLoop(now){
-    var total = totalDur();
-    if (mode === "play" && steps.length && total > 0){
+    var list = draftPreview ? steps.concat([draftStep()]) : steps;
+    var total = totalDur(list);
+    if ((mode === "play" || draftPreview) && list.length && total > 0){
       var t = ((now - playStart) / 1000) % total;
-      renderAt(t, now);
-    } else if (steps.length){
-      renderAt(total, now);
+      renderAt(t, now, list);
+    } else if (list.length){
+      renderAt(total, now, list);
     } else {
-      renderAt(0, now);
+      renderAt(0, now, list);
     }
     requestAnimationFrame(drawLoop);
   }
@@ -500,8 +510,15 @@
       Math.abs(a.opacity - b.opacity) < 0.001 && a.flip === b.flip;
   }
 
+  function setDraft(on){
+    draftPreview = on;
+    $("draftBtn").textContent = on ? "⏸ 下書きプレビューを止める" : "▶ いまの設定を再生して見る（まだ追加しない）";
+    if (on) playStart = performance.now();
+  }
+  function draftTouch(){ if (draftPreview) playStart = performance.now(); }
+
   function updateUI(){
-    $("sizeInfo").textContent = "画面: " + W + "×" + H + "px／合計: " + totalDur() + "秒";
+    $("sizeInfo").textContent = "画面: " + W + "×" + H + "px／合計: " + totalDur(steps) + "秒";
     var list = $("stepList");
     list.innerHTML = "";
     steps.forEach(function(st, i){
@@ -515,14 +532,15 @@
       del.addEventListener("click", function(){
         steps.splice(i, 1);
         mode = "still"; $("playBtn").textContent = "▶ 再生する";
+        setDraft(false);
         updateUI();
       });
       div.appendChild(txt); div.appendChild(del);
       list.appendChild(div);
     });
     if (steps.length){
-      var states = foldStates();
-      $("chainInfo").textContent = "合計 " + totalDur() + "秒／" + steps.length + "ステップ";
+      var states = foldStates(steps);
+      $("chainInfo").textContent = "合計 " + totalDur(steps) + "秒／" + steps.length + "ステップ";
       $("loopWarn").style.display = sameState(states[states.length - 1], states[0]) ? "none" : "block";
     } else {
       $("chainInfo").textContent = "まだステップがありません。";
@@ -556,17 +574,21 @@
   wire("startPosPad", "data-pos", function(v){ startPos = parseInt(v, 10); });
   wire("startRotSeg", "data-srot", function(v){ startRot = parseInt(v, 10); });
   wire("startFlipSeg", "data-sflip", function(v){ startFlip = parseInt(v, 10); });
-  wire("dSizeSeg", "data-dsize", function(v){ dSize = parseFloat(v); });
-  wire("dRotSeg", "data-drot", function(v){ dRot = parseInt(v, 10); });
+  wire("dSizeSeg", "data-dsize", function(v){ dSize = parseFloat(v); draftTouch(); });
+  wire("dRotSeg", "data-drot", function(v){ dRot = parseInt(v, 10); draftTouch(); });
   wire("dMovePad", "data-dir", function(v){
     var p = v.split(",");
     dDirX = parseInt(p[0], 10); dDirY = parseInt(p[1], 10);
+    draftTouch();
   });
-  wire("dMoveAmtSeg", "data-amt", function(v){ dAmt = parseFloat(v); });
-  wire("dOpSeg", "data-op", function(v){ dOp = v === "keep" ? null : parseFloat(v); });
-  wire("dFlipSeg", "data-dflip", function(v){ dFlip = parseInt(v, 10); });
-  wire("dFxSeg", "data-fx", function(v){ dFx = v; });
-  wire("dDurSeg", "data-dur", function(v){ dDur = parseFloat(v); });
+  wire("dMoveAmtSeg", "data-amt", function(v){ dAmt = parseFloat(v); draftTouch(); });
+  wire("dOpSeg", "data-op", function(v){ dOp = v === "keep" ? null : parseFloat(v); draftTouch(); });
+  wire("dFlipSeg", "data-dflip", function(v){ dFlip = parseInt(v, 10); draftTouch(); });
+  wire("dFxSeg", "data-fx", function(v){ dFx = v; draftTouch(); });
+  wire("dDurSeg", "data-dur", function(v){ dDur = parseFloat(v); draftTouch(); });
+  $("draftBtn").addEventListener("click", function(){
+    setDraft(!draftPreview);
+  });
 
   // ---- 画像読み込み ----
   $("pickBtn").addEventListener("click", function(e){
@@ -593,9 +615,9 @@
   // ---- ステップ操作 ----
   $("addStepBtn").addEventListener("click", function(){
     if (steps.length >= MAX_STEPS) return;
-    steps.push({ size: dSize, rot: dRot, dirX: dDirX, dirY: dDirY, amt: dAmt,
-      op: dOp, flip: dFlip, fx: dFx, dur: dDur, ret: false });
+    steps.push(draftStep());
     mode = "still"; $("playBtn").textContent = "▶ 再生する";
+    setDraft(false);
     updateUI();
   });
   $("returnStepBtn").addEventListener("click", function(){
@@ -603,11 +625,13 @@
     steps.push({ size: 1, rot: 0, dirX: 0, dirY: 0, amt: 0.07, op: null, flip: 0,
       fx: "none", dur: dDur, ret: true });
     mode = "still"; $("playBtn").textContent = "▶ 再生する";
+    setDraft(false);
     updateUI();
   });
   $("clearStepsBtn").addEventListener("click", function(){
     steps = [];
     mode = "still"; $("playBtn").textContent = "▶ 再生する";
+    setDraft(false);
     updateUI();
   });
   $("playBtn").addEventListener("click", function(){
@@ -640,32 +664,44 @@
       $("msg").textContent = "このブラウザではWebM書き出しに対応していません。Chromeで開いてください。";
       return;
     }
-    var total = totalDur();
+    var total = totalDur(steps);
+    setDraft(false);
     recording = true;
     $("exportBtn").disabled = true;
-    $("msg").textContent = "書き出し中…（スタートから最後までを録画しています）";
-    mode = "play";
-    playStart = performance.now();
-    var stream = cv.captureStream(30);
-    var rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8000000 });
-    var chunks = [];
-    rec.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
-    rec.onstop = function(){
-      recording = false;
-      mode = "still";
-      $("playBtn").textContent = "▶ 再生する";
-      var blob = new Blob(chunks, { type: "video/webm" });
-      if (resultUrl) URL.revokeObjectURL(resultUrl);
-      resultUrl = URL.createObjectURL(blob);
-      $("resultVideo").src = resultUrl;
-      $("dlLink").href = resultUrl;
-      $("resultBox").style.display = "block";
-      $("msg").textContent = "書き出しました（" + W + "×" + H + "px／" + total + "秒／" +
-        Math.max(1, Math.round(blob.size / 1024)) + "KB）";
-      updateUI();
+    var attempts = 0;
+    var startRecord = function(){
+      $("msg").textContent = attempts
+        ? "書き出しをやり直しています…"
+        : "書き出し中…（スタートから最後までを録画しています）";
+      mode = "play";
+      playStart = performance.now();
+      var stream = cv.captureStream(30);
+      var rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8000000 });
+      var chunks = [];
+      rec.ondataavailable = function(e){ if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop = function(){
+        var blob = new Blob(chunks, { type: "video/webm" });
+        if (blob.size < 1000 && attempts < 1){
+          attempts++;
+          startRecord();
+          return;
+        }
+        recording = false;
+        mode = "still";
+        $("playBtn").textContent = "▶ 再生する";
+        if (resultUrl) URL.revokeObjectURL(resultUrl);
+        resultUrl = URL.createObjectURL(blob);
+        $("resultVideo").src = resultUrl;
+        $("dlLink").href = resultUrl;
+        $("resultBox").style.display = "block";
+        $("msg").textContent = "書き出しました（" + W + "×" + H + "px／" + total + "秒／" +
+          Math.max(1, Math.round(blob.size / 1024)) + "KB）";
+        updateUI();
+      };
+      rec.start(200);
+      setTimeout(function(){ if (rec.state !== "inactive") rec.stop(); }, total * 1000 + 60);
     };
-    rec.start(200);
-    setTimeout(function(){ if (rec.state !== "inactive") rec.stop(); }, total * 1000 + 60);
+    startRecord();
   });
 
   updateUI();
