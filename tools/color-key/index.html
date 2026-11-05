@@ -165,7 +165,7 @@
   <div class="card foot">
     <b>使い方・注意</b><br>
     ・抜けるのは「画像のフチからつながっている、背景色に近い色」だけです。キャラクターの白い服や白目など、内側にある同じ色は抜けません。<br>
-    ・「新：マスク先行」（試作）は、輪郭を太く膨らませたマスクで内側を守ってから外側を全部抜く方式です。輪郭の線が途切れていても内側に侵入しにくく、背景がグラデーションでも外側をまとめて抜けます。代わりに、輪郭の外側すぐ近くの背景色に近い部分は少し削れることがあります。<br>
+    ・「新：マスク先行」（試作）は、輪郭を一度閉じて内側をマスクで守り、それ以外を色の近さで切り直す方式です。輪郭の線が途切れていても内側に侵入しにくく、髪と体の間のような凹みの背景も残りにくく、グラデーション背景にも効きます。<br>
     ・指の輪の中や腕と体の間など、フチからつながっていない背景は「タップで抜く」でその場所をタップすると抜けます。<br>
     ・向いている素材は、白や単色の背景のイラスト、ファンアート、ロゴ、単色背景の生成画像などです。写真のような複雑な背景は苦手です（その場合はAI背景抜きの出番です）。<br>
     ・背景色の自動判定がずれたら、色の四角をタップして正しい背景色に直してください。<br>
@@ -416,9 +416,21 @@
     return out;
   }
 
-  // 新方式（マスク先行・試作）:
-  // 「被写体らしい色（コア）」を太く膨らませたマスクを壁にして、外側を色を問わず全部抜く。
-  // 内側は構造的に守られる。マスクの帯（輪郭の外側R px）だけ色の近さで切り直してハロを防ぐ。
+  // 新方式（マスク先行・試作 v2）:
+  // 被写体の輪郭（コア）を膨張→収縮で閉じて（細い隙間をふさぐ）穴埋めし、
+  // 「コアそのもの」と「閉じた輪郭の内側の穴」だけを保護する。
+  // それ以外（外側・輪郭の凹みのポケット・帯）は色の近さで切り直すので、
+  // 髪と体の間のような深い凹みに背景色が四角く残らない。
+  function boxErode(srcM, W, H, R){
+    if (R <= 0) return srcM;
+    var inv = new Uint8Array(W * H);
+    for (var i = 0; i < W * H; i++) inv[i] = srcM[i] ? 0 : 1;
+    var d = boxDilate(inv, W, H, R);
+    var out = new Uint8Array(W * H);
+    for (var j = 0; j < W * H; j++) out[j] = d[j] ? 0 : 1;
+    return out;
+  }
+
   function computeKeyedMask(){
     var W = srcCanvas.width, H = srcCanvas.height, N = W * H;
     var dist = computeDist();
@@ -430,23 +442,26 @@
     var i, x, y;
     var core = new Uint8Array(N);
     for (i = 0; i < N; i++) core[i] = dist[i] > t1 ? 1 : 0;
-    var R = Math.max(3, Math.min(20, Math.round(Math.min(W, H) * 0.02)));
-    var wall = boxDilate(core, W, H, R);
-    var reached = new Uint8Array(N);
+    // 輪郭を閉じる半径（足場）。ふさげる隙間はこの2倍まで
+    var Rc = Math.max(3, Math.min(12, Math.round(Math.min(W, H) * 0.015)));
+    var closed = boxErode(boxDilate(core, W, H, Rc), W, H, Rc);
+    // 閉じた輪郭の外側（フチから到達できる範囲）
+    var ext = new Uint8Array(N);
     var stack = [];
-    function tryPushR(idx){ if (!reached[idx] && !wall[idx]){ reached[idx] = 1; stack.push(idx); } }
-    for (x = 0; x < W; x++){ tryPushR(x); tryPushR((H - 1) * W + x); }
-    for (y = 0; y < H; y++){ tryPushR(y * W); tryPushR(y * W + W - 1); }
+    function tryPushE(idx){ if (!ext[idx] && !closed[idx]){ ext[idx] = 1; stack.push(idx); } }
+    for (x = 0; x < W; x++){ tryPushE(x); tryPushE((H - 1) * W + x); }
+    for (y = 0; y < H; y++){ tryPushE(y * W); tryPushE(y * W + W - 1); }
     while (stack.length){
       var cur = stack.pop();
       var cx = cur % W, cy = (cur / W) | 0;
-      if (cx > 0) tryPushR(cur - 1);
-      if (cx < W - 1) tryPushR(cur + 1);
-      if (cy > 0) tryPushR(cur - W);
-      if (cy < H - 1) tryPushR(cur + W);
+      if (cx > 0) tryPushE(cur - 1);
+      if (cx < W - 1) tryPushE(cur + 1);
+      if (cy > 0) tryPushE(cur - W);
+      if (cy < H - 1) tryPushE(cur + W);
     }
-    var band = boxDilate(reached, W, H, R);
-    // タップで抜く: 囲まれた場所用。色距離の範囲内で広げる（マスクの内外は問わない）
+    // 輪郭のすぐ近くの帯（境界のギザギザをなだらかにする範囲）
+    var near = boxDilate(closed, W, H, 3);
+    // タップで抜く: 囲まれた場所用。色距離の範囲内で広げる
     var tapVis = new Uint8Array(N);
     var tstack = [];
     function tryPushT(idx){ if (!tapVis[idx] && dist[idx] <= t1){ tapVis[idx] = 1; tstack.push(idx); } }
@@ -470,15 +485,18 @@
       o[j] = src[j]; o[j + 1] = src[j + 1]; o[j + 2] = src[j + 2]; o[j + 3] = src[j + 3];
       var a0 = src[j + 3];
       if (a0 === 0) continue;
-      var cover = -1; // -1 = そのまま残す
-      if (reached[i]) cover = 0;
-      else if (tapVis[i] || (band[i] && dist[i] <= t1)){
-        var dd = dist[i];
-        if (dd <= t0) cover = 0;
-        else if (dd >= t1) cover = 1;
-        else cover = (dd - t0) / (t1 - t0);
+      // 保護されるのは「コア」か「閉じた輪郭の内側の穴」だけ。それ以外は色で切り直す
+      var isInterior = core[i] || (!closed[i] && !ext[i]);
+      if (!tapVis[i] && isInterior) continue;
+      var dd = dist[i], cover;
+      if (!tapVis[i] && ext[i] && !near[i]){
+        // 輪郭から離れた外側は「確実に背景」なので、色が許容範囲内なら完全に抜く
+        // （グラデーションの中間色が半透明に残らないように）
+        cover = dd <= t1 ? 0 : 1;
       }
-      if (cover < 0) continue;
+      else if (dd <= t0) cover = 0;
+      else if (dd >= t1) cover = 1;
+      else cover = (dd - t0) / (t1 - t0);
       var newA = Math.round(a0 * cover);
       o[j + 3] = newA;
       if (newA > 0 && cover < 1 && cover > 0){
