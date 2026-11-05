@@ -416,7 +416,7 @@
     return out;
   }
 
-  // 新方式（マスク先行・試作 v3）:
+  // 新方式（マスク先行・試作 v4）:
   // 被写体の輪郭（コア）を膨張→収縮で閉じて（細い隙間をふさぐ）穴埋めし、
   // 「コアそのもの」と「閉じた輪郭の内側の穴」だけを保護する。
   // 外側の判定では、コアに加えて「色の段差（輪郭の線）」も壁にするので、
@@ -447,26 +447,29 @@
     // 輪郭を閉じる半径（足場）。ふさげる隙間はこの2倍まで
     var Rc = Math.max(3, Math.min(12, Math.round(Math.min(W, H) * 0.015)));
     var closed = boxErode(boxDilate(core, W, H, Rc), W, H, Rc);
-    // 壁 = 閉じたコア + 色の段差（輪郭）。段差は1px太らせて、にじんだ線でも漏らさない
+    // 壁 = 閉じたコア + 色の段差（輪郭）。段差は3px先との差で見るので、
+    // ぼかしたように柔らかい輪郭（肌と白背景の境目など）でも壁になる
     var barrier = closed.slice();
     var sd = srcData.data;
-    var ETH2 = 20 * 20; // 色距離20以上の段差を輪郭とみなす
+    var ETH2 = 15 * 15; // 3px先との色距離15以上の段差を輪郭とみなす
     for (i = 0; i < N; i++){
       var bx = i % W, by = (i / W) | 0;
       var j4 = i * 4;
       var mx = 0;
-      if (bx < W - 1){
-        var dr1 = sd[j4] - sd[j4 + 4], dg1 = sd[j4 + 1] - sd[j4 + 5], db1 = sd[j4 + 2] - sd[j4 + 6];
+      if (bx < W - 3){
+        var k4 = j4 + 12;
+        var dr1 = sd[j4] - sd[k4], dg1 = sd[j4 + 1] - sd[k4 + 1], db1 = sd[j4 + 2] - sd[k4 + 2];
         mx = dr1 * dr1 + dg1 * dg1 + db1 * db1;
       }
-      if (by < H - 1){
-        var dr2 = sd[j4] - sd[j4 + W * 4], dg2 = sd[j4 + 1] - sd[j4 + W * 4 + 1], db2 = sd[j4 + 2] - sd[j4 + W * 4 + 2];
+      if (by < H - 3){
+        var k5 = j4 + W * 12;
+        var dr2 = sd[j4] - sd[k5], dg2 = sd[j4 + 1] - sd[k5 + 1], db2 = sd[j4 + 2] - sd[k5 + 2];
         var d2v = dr2 * dr2 + dg2 * dg2 + db2 * db2;
         if (d2v > mx) mx = d2v;
       }
       if (mx > ETH2) barrier[i] = 1;
     }
-    barrier = boxDilate(barrier, W, H, 1);
+    barrier = boxDilate(barrier, W, H, 2);
     // 壁の外側（フチから到達できる範囲）
     var ext = new Uint8Array(N);
     var stack = [];
@@ -483,6 +486,7 @@
     }
     // 輪郭のすぐ近くの帯（境界のギザギザをなだらかにする範囲）
     var near = boxDilate(closed, W, H, 3);
+    var nearExt = boxDilate(ext, W, H, 2);
     // タップで抜く: 囲まれた場所用。色距離の範囲内で広げる
     var tapVis = new Uint8Array(N);
     var tstack = [];
@@ -507,11 +511,13 @@
       o[j] = src[j]; o[j + 1] = src[j + 1]; o[j + 2] = src[j + 2]; o[j + 3] = src[j + 3];
       var a0 = src[j + 3];
       if (a0 === 0) continue;
-      // 保護されるのは「コア」か「閉じた輪郭の内側の穴」だけ。それ以外は色で切り直す
-      var isInterior = core[i] || (!closed[i] && !ext[i]);
+      // 保護されるのは「コア」「閉じた輪郭の内側の穴」「壁の内側の深い部分」
+      var isInterior = core[i] || (!closed[i] && !ext[i] && !barrier[i]);
       if (!tapVis[i] && isInterior) continue;
       var dd = dist[i], cover;
-      if (!tapVis[i] && ext[i] && !near[i]){
+      if (!tapVis[i] && dd <= t0) cover = 0;
+      else if (!tapVis[i] && !ext[i] && !nearExt[i]) continue; // 壁の内側の深い部分（陰影の段差など）は守る
+      else if (!tapVis[i] && ext[i] && !near[i]){
         // 輪郭から離れた外側は「確実に背景」なので、色が許容範囲内なら完全に抜く
         // （グラデーションの中間色が半透明に残らないように）
         cover = dd <= t1 ? 0 : 1;
