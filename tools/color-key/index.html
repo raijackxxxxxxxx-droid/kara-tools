@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>色抜き・フチ取り君（仮）— 背景色を抜いて透過にし、フチを付けるツール</title>
+<style>
+  :root{
+    --bg:#171a21; --panel:#21252f; --panel2:#282d3a; --line:#3a4152;
+    --text:#eef1f6; --sub:#9aa5b5; --accent:#ffd34d; --accent-text:#231a00;
+    --btn:#39415a; --btn-text:#eef1f6;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--text);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;}
+  .wrap{max-width:720px; margin:0 auto; padding:16px 14px 40px;}
+  h1{font-size:20px; margin:6px 0 2px;}
+  .lead{color:var(--sub); font-size:13px; margin:0 0 14px; line-height:1.6;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px;}
+  .card h2{font-size:14px; margin:0 0 10px; color:var(--sub); font-weight:600; letter-spacing:.05em;}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
+  .row:last-child{margin-bottom:0;}
+  button{font-size:16px; padding:12px 16px; border-radius:10px; border:1px solid var(--line);
+    background:var(--btn); color:var(--btn-text); cursor:pointer;}
+  button:active{transform:scale(.97);}
+  button.primary{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  button:disabled{opacity:.45; cursor:default;}
+  button.toggleon{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  input[type="range"]{flex:1; min-width:110px; accent-color:var(--accent);}
+  input[type="range"]:disabled{opacity:.45;}
+  input[type="color"]{width:52px; height:38px; border:1px solid var(--line); border-radius:8px; background:var(--panel2); padding:2px; cursor:pointer;}
+  input[type="color"]:disabled{opacity:.45; cursor:default;}
+  label{font-size:14px; color:var(--sub);}
+  .val{font-size:13px; color:var(--text); min-width:44px; text-align:right;}
+  .seg{display:flex; gap:8px; flex-wrap:wrap;}
+  .seg button{font-size:14px; padding:9px 14px; border-radius:999px;}
+  .seg button.on{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+  .drop{border:2px dashed var(--line); border-radius:12px; padding:22px 12px; text-align:center;
+    color:var(--sub); font-size:14px; line-height:1.7; cursor:pointer;}
+  .drop b{color:var(--text); font-size:16px;}
+  .sticky{position:sticky; top:8px; z-index:10; box-shadow:0 6px 18px rgba(0,0,0,.35);}
+  .prevbox{border:1px solid var(--line); border-radius:10px; padding:10px;
+    background:repeating-conic-gradient(#2b303d 0 25%, #22262f 0 50%) 0 0/24px 24px;
+    text-align:center;}
+  .prevscroll{overflow:auto; max-height:40vh;}
+  .prevscroll canvas{display:block; margin:0 auto;}
+  .swatch{display:inline-block; width:26px; height:26px; border:1px solid var(--line); border-radius:6px; vertical-align:middle;}
+  .msg{min-height:20px; font-size:13px; color:var(--accent); margin-top:8px;}
+  .info{font-size:13px; color:var(--sub); margin-top:8px; min-height:18px; line-height:1.6;}
+  .warn{font-size:13px; color:var(--accent); margin-top:8px; line-height:1.6;}
+  .lockwrap{opacity:.45;}
+  .foot{color:var(--sub); font-size:12px; line-height:1.7;}
+  .foot b{color:var(--text);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎨 色抜き・フチ取り君（仮）</h1>
+  <p class="lead">画像のフチからつながっている背景色だけを抜いて透過にし、そのまま輪郭にフチも付けられるツールです。白背景のイラストやロゴを「ステッカー化」するための道具です。絵の内側にある同じ色は抜けません。</p>
+
+  <div class="card sticky" id="prevCard" style="display:none;">
+    <h2>プレビュー</h2>
+    <div class="prevbox"><div class="prevscroll" id="prevScroll"><canvas id="cv" width="10" height="10"></canvas></div></div>
+    <div class="row" style="margin-top:10px;">
+      <button id="zoomFit">全体</button>
+      <button id="zoomOut">− 縮小</button>
+      <button id="zoomIn">＋ 拡大</button>
+      <span class="info" id="zoomInfo" style="margin-top:0;">全体表示</span>
+    </div>
+    <div class="info" id="stageInfo"></div>
+  </div>
+
+  <div class="card">
+    <h2>1. 画像を読み込む</h2>
+    <div class="drop" id="drop">
+      <b>タップして画像を選ぶ</b><br>
+      （PCではドラッグ＆ドロップでも開けます）
+    </div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;">
+    <div class="msg" id="fileMsg"></div>
+  </div>
+
+  <div class="card" id="keyCard" style="display:none;">
+    <h2>2. 色抜き（背景色を透過にする）</h2>
+    <div class="row">
+      <label>背景色</label>
+      <span class="swatch" id="bgSwatch"></span>
+      <input type="color" id="bgColor" value="#ffffff">
+      <button id="bgAuto" style="font-size:14px; padding:9px 14px;">自動に戻す</button>
+      <span class="info" style="margin-top:0;">四隅から自動判定しています</span>
+    </div>
+    <div class="row">
+      <label for="tolRange">許容度</label>
+      <input type="range" id="tolRange" min="0" max="60" value="12">
+      <span class="val" id="tolVal">12%</span>
+    </div>
+    <div class="row">
+      <label for="softRange">エッジの滑らかさ</label>
+      <input type="range" id="softRange" min="0" max="100" value="40">
+      <span class="val" id="softVal">40%</span>
+    </div>
+    <div class="info">許容度は「どこまで背景色に近い色を抜くか」、滑らかさは「輪郭のギザギザをどれだけなだらかにするか」です。プレビューを見ながら調整してください。</div>
+    <div class="row">
+      <label>中も抜く</label>
+      <button id="tapModeBtn" style="font-size:14px; padding:9px 14px;">タップで抜く: オフ</button>
+      <button id="tapClearBtn" style="font-size:14px; padding:9px 14px;" disabled>タップを全て戻す</button>
+    </div>
+    <div class="info">フチからつながっていない場所（👌の指の輪の中、腕と体の間、髪のすき間など）は、そのままでは抜けません。「タップで抜く」をオンにして、プレビューの抜きたい場所をタップすると、その場所からつながった背景色も抜けます。</div>
+    <div class="row" style="margin-top:10px;">
+      <button id="confirmBtn" class="primary" style="flex:1;">この色抜きで確定する</button>
+    </div>
+    <div class="msg" id="keyMsg"></div>
+  </div>
+
+  <div class="card" id="fuchiCard" style="display:none;">
+    <h2>3. フチ取り（色抜きを確定すると使えます）</h2>
+    <div class="warn" id="fuchiLock">まず上の「この色抜きで確定する」を押してください。フチは、確定した輪郭に沿って付きます。</div>
+    <div id="fuchiControls" class="lockwrap">
+      <div class="row">
+        <label>フチ取り</label>
+        <div class="seg" id="fuchiSeg">
+          <button data-fuchi="off" class="on">しない</button>
+          <button data-fuchi="on">する</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>フチの色</label>
+        <div class="seg" id="fuchiColorSeg">
+          <button data-fcolor="#ffffff" class="on">白</button>
+          <button data-fcolor="#000000">黒</button>
+          <button data-fcolor="#ff5252">赤</button>
+          <button data-fcolor="#4da3ff">青</button>
+          <button data-fcolor="#ffd34d">黄</button>
+        </div>
+        <input type="color" id="fuchiColor" value="#ffffff">
+      </div>
+      <div class="row">
+        <label for="thickRange">フチの太さ</label>
+        <input type="range" id="thickRange" min="0" max="100" value="35">
+        <span class="val" id="thickVal">35</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="outCard" style="display:none;">
+    <h2>4. 保存</h2>
+    <div class="row">
+      <button id="savePng" class="primary" style="flex:1;">PNGで保存</button>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="prevbox" id="resultBox" style="display:none; margin-top:10px;">
+      <div class="foot" style="margin-bottom:8px;">保存用画像（スマホでは長押しでも保存できます）</div>
+      <img id="resultImg" alt="保存用画像" style="max-width:100%; height:auto;">
+    </div>
+  </div>
+
+  <div class="card foot">
+    <b>使い方・注意</b><br>
+    ・抜けるのは「画像のフチからつながっている、背景色に近い色」だけです。キャラクターの白い服や白目など、内側にある同じ色は抜けません。<br>
+    ・指の輪の中や腕と体の間など、フチからつながっていない背景は「タップで抜く」でその場所をタップすると抜けます。<br>
+    ・向いている素材は、白や単色の背景のイラスト、ファンアート、ロゴ、単色背景の生成画像などです。写真のような複雑な背景は苦手です（その場合はAI背景抜きの出番です）。<br>
+    ・背景色の自動判定がずれたら、色の四角をタップして正しい背景色に直してください。<br>
+    ・色抜きの設定を変えると、フチ取りは一度ロックされます。もう一度「確定する」を押してください。<br>
+    ・大きな画像は最長辺2048pxに縮小して処理します（ステッカーやサムネ素材には十分な大きさです）。iPhoneの写真形式（HEIC）は開けないことがあります。PNG・JPEG・WebPを使ってください。<br>
+    ・画像はブラウザの中でだけ処理され、外部に送信されることはありません。ネット接続も不要です。
+  </div>
+
+  <p class="foot"><a href="../../index.html" style="color:var(--sub);">← カラの道具箱へ戻る</a>　／　<a href="../../LICENSE" style="color:var(--sub);">MIT License</a></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+
+  var MAXSIDE = 2048;
+  var srcCanvas = document.createElement("canvas");  // 元画像（作業サイズ）
+  var srcData = null;                                 // 元画像の ImageData
+  var keyedCanvas = document.createElement("canvas"); // 確定した色抜き結果
+  var stage = "none";        // none | key（編集中） | done（確定済み）
+  var bg = { r: 255, g: 255, b: 255 };
+  var distCache = null, distKey = "";
+  var fuchiOn = false;
+  var fuchiColor = "#ffffff";
+  var taps = [];             // 「タップで抜く」の種（作業座標）
+  var tapMode = false;
+  var zoomIdx = 0;           // 0=全体, 1..3=拡大
+  var ZOOMS = [0, 1.5, 2.5, 4];
+  var resultUrl = null;
+  var recomputeTimer = null;
+
+  function show(id, on){ $(id).style.display = on ? "block" : "none"; }
+
+  function hexToRgb(hex){
+    var n = parseInt(hex.slice(1), 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+  function rgbToHex(c){
+    function h(v){ var s = Math.max(0, Math.min(255, Math.round(v))).toString(16); return s.length < 2 ? "0" + s : s; }
+    return "#" + h(c.r) + h(c.g) + h(c.b);
+  }
+
+  // ---- 読み込み ----
+  function loadFile(file){
+    if (!file) return;
+    if (file.type && file.type.indexOf("image/") !== 0){
+      $("fileMsg").textContent = "画像ファイルを選んでください";
+      return;
+    }
+    var url = URL.createObjectURL(file);
+    var im = new Image();
+    im.onload = function(){
+      URL.revokeObjectURL(url);
+      var iw = im.naturalWidth, ih = im.naturalHeight;
+      var scale = Math.min(1, MAXSIDE / Math.max(iw, ih));
+      var W = Math.max(1, Math.round(iw * scale)), H = Math.max(1, Math.round(ih * scale));
+      srcCanvas.width = W; srcCanvas.height = H;
+      var sctx = srcCanvas.getContext("2d");
+      sctx.drawImage(im, 0, 0, W, H);
+      srcData = sctx.getImageData(0, 0, W, H);
+      distCache = null;
+      taps = [];
+      tapMode = false;
+      $("tapModeBtn").textContent = "タップで抜く: オフ";
+      $("tapModeBtn").classList.remove("toggleon");
+      $("tapClearBtn").disabled = true;
+      stage = "key";
+      detectBg();
+      $("fileMsg").textContent = file.name + "（" + iw + "×" + ih + "px" +
+        (scale < 1 ? " → " + W + "×" + H + "pxに縮小して処理" : "") + "）";
+      show("prevCard", true); show("keyCard", true); show("fuchiCard", true); show("outCard", true);
+      updateFuchiLock();
+      applyZoom();
+      computeKeyAndDraw();
+    };
+    im.onerror = function(){
+      URL.revokeObjectURL(url);
+      $("fileMsg").textContent = "画像を読み込めませんでした（HEIC形式は開けないことがあります）";
+    };
+    im.src = url;
+  }
+
+  // 背景色の自動判定: フチのピクセル（不透明なもの）を色で集計し、最頻色の平均を取る
+  function detectBg(){
+    if (!srcData) return;
+    var d = srcData.data, W = srcCanvas.width, H = srcCanvas.height;
+    var buckets = {};
+    function sample(x, y){
+      var i = (y * W + x) * 4;
+      if (d[i + 3] < 200) return;
+      var key = ((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4);
+      if (!buckets[key]) buckets[key] = { n: 0, r: 0, g: 0, b: 0 };
+      var bk = buckets[key];
+      bk.n++; bk.r += d[i]; bk.g += d[i + 1]; bk.b += d[i + 2];
+    }
+    var x, y;
+    for (x = 0; x < W; x += 3){ sample(x, 0); sample(x, H - 1); }
+    for (y = 0; y < H; y += 3){ sample(0, y); sample(W - 1, y); }
+    var best = null;
+    for (var k in buckets){ if (!best || buckets[k].n > best.n) best = buckets[k]; }
+    if (best){
+      bg = { r: best.r / best.n, g: best.g / best.n, b: best.b / best.n };
+    } else {
+      bg = { r: 255, g: 255, b: 255 };
+    }
+    $("bgColor").value = rgbToHex(bg);
+    $("bgSwatch").style.background = rgbToHex(bg);
+    distCache = null;
+  }
+
+  // ---- 色抜き計算 ----
+  function computeDist(){
+    var key = bg.r.toFixed(1) + "," + bg.g.toFixed(1) + "," + bg.b.toFixed(1);
+    if (distCache && distKey === key) return distCache;
+    var d = srcData.data, N = srcCanvas.width * srcCanvas.height;
+    var dist = new Float32Array(N);
+    for (var i = 0; i < N; i++){
+      var dr = d[i * 4] - bg.r, dg = d[i * 4 + 1] - bg.g, db = d[i * 4 + 2] - bg.b;
+      dist[i] = Math.sqrt(dr * dr + dg * dg + db * db);
+    }
+    distCache = dist; distKey = key;
+    return dist;
+  }
+
+  // 端からBFSでたどり、到達したピクセルだけを透明化する（内側の同色は残る）
+  function computeKeyed(){
+    var W = srcCanvas.width, H = srcCanvas.height, N = W * H;
+    var dist = computeDist();
+    var tol = parseInt($("tolRange").value, 10);          // %
+    var soft = parseInt($("softRange").value, 10);        // %
+    var T = tol * 4.417;                                  // 色距離のしきい値
+    var halfBand = soft * 0.9;                            // 滑らかさの幅（距離単位）
+    var t0 = Math.max(0, T - halfBand), t1 = T + halfBand;
+    var visited = new Uint8Array(N);
+    var stack = [];
+    var x, y, i;
+    function tryPush(idx){
+      if (!visited[idx] && dist[idx] <= t1){ visited[idx] = 1; stack.push(idx); }
+    }
+    for (x = 0; x < W; x++){ tryPush(x); tryPush((H - 1) * W + x); }
+    for (y = 0; y < H; y++){ tryPush(y * W); tryPush(y * W + W - 1); }
+    // 「タップで抜く」の種: タップした点は無条件に起点にする（広がり方は色距離で決まる）
+    for (var ti = 0; ti < taps.length; ti++){
+      var tIdx = taps[ti].y * W + taps[ti].x;
+      if (!visited[tIdx]){ visited[tIdx] = 1; stack.push(tIdx); }
+    }
+    while (stack.length){
+      var cur = stack.pop();
+      var cx = cur % W, cy = (cur / W) | 0;
+      if (cx > 0) tryPush(cur - 1);
+      if (cx < W - 1) tryPush(cur + 1);
+      if (cy > 0) tryPush(cur - W);
+      if (cy < H - 1) tryPush(cur + W);
+    }
+    var src = srcData.data;
+    var out = new ImageData(W, H);
+    var o = out.data;
+    for (i = 0; i < N; i++){
+      var j = i * 4;
+      o[j] = src[j]; o[j + 1] = src[j + 1]; o[j + 2] = src[j + 2]; o[j + 3] = src[j + 3];
+      if (!visited[i]) continue;
+      var a0 = src[j + 3];
+      if (a0 === 0) continue;
+      var dd = dist[i], cover;
+      if (dd <= t0) cover = 0;
+      else if (dd >= t1) cover = 1;
+      else cover = (dd - t0) / (t1 - t0);
+      var newA = Math.round(a0 * cover);
+      o[j + 3] = newA;
+      // 半透明になった境界ピクセルは、背景色の混ざりを引いて色を戻す（アンブレンド）
+      if (newA > 0 && cover < 1){
+        var inv = 1 - cover;
+        o[j]     = Math.max(0, Math.min(255, Math.round((src[j]     - bg.r * inv) / cover)));
+        o[j + 1] = Math.max(0, Math.min(255, Math.round((src[j + 1] - bg.g * inv) / cover)));
+        o[j + 2] = Math.max(0, Math.min(255, Math.round((src[j + 2] - bg.b * inv) / cover)));
+      }
+    }
+    return out;
+  }
+
+  function computeKeyAndDraw(){
+    if (!srcData) return;
+    var imgData = computeKeyed();
+    var cv = $("cv");
+    cv.width = srcCanvas.width; cv.height = srcCanvas.height;
+    cv.getContext("2d").putImageData(imgData, 0, 0);
+    applyZoom();
+    $("stageInfo").textContent = "色抜きの編集中です。決まったら「この色抜きで確定する」を押してください。";
+  }
+
+  function scheduleKey(){
+    if (stage === "done"){
+      stage = "key";
+      updateFuchiLock();
+      $("keyMsg").textContent = "設定が変わったので、フチ取りはロックされました。もう一度確定してください。";
+    }
+    if (recomputeTimer) clearTimeout(recomputeTimer);
+    recomputeTimer = setTimeout(computeKeyAndDraw, 70);
+  }
+
+  // ---- フチ取り ----
+  function thickPx(){
+    var v = parseInt($("thickRange").value, 10);
+    var md = Math.min(srcCanvas.width, srcCanvas.height);
+    return Math.max(0, Math.round(md * (v / 100) * 0.08));
+  }
+
+  function compose(){
+    // 確定済み keyedCanvas にフチを付けてプレビュー canvas に描く
+    var cv = $("cv");
+    var ctx = cv.getContext("2d");
+    var t = fuchiOn ? thickPx() : 0;
+    if (!t){
+      cv.width = keyedCanvas.width; cv.height = keyedCanvas.height;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(keyedCanvas, 0, 0);
+      applyZoom();
+      $("stageInfo").textContent = "色抜き確定済み（フチなし）：" + cv.width + "×" + cv.height + "px";
+      return;
+    }
+    // 輪郭のシルエット（フチ色で塗った影）を、円周上にずらしながら何度も描いて太らせる
+    var sil = document.createElement("canvas");
+    sil.width = keyedCanvas.width; sil.height = keyedCanvas.height;
+    var sctx = sil.getContext("2d");
+    sctx.drawImage(keyedCanvas, 0, 0);
+    sctx.globalCompositeOperation = "source-in";
+    sctx.fillStyle = fuchiColor;
+    sctx.fillRect(0, 0, sil.width, sil.height);
+    // 作業用に少し縮小したシルエットで押印すると速い（輪郭が少し柔らかくなるのもステッカー向き）
+    var oScale = Math.min(1, 1200 / Math.max(sil.width, sil.height));
+    var ow = Math.max(1, Math.round(sil.width * oScale)), oh = Math.max(1, Math.round(sil.height * oScale));
+    var oc = document.createElement("canvas");
+    oc.width = ow + Math.ceil(2 * t * oScale); oc.height = oh + Math.ceil(2 * t * oScale);
+    var octx = oc.getContext("2d");
+    var ot = t * oScale;
+    var rings = [1, 0.62, 0.3];
+    for (var ri = 0; ri < rings.length; ri++){
+      var r = ot * rings[ri];
+      var steps = Math.max(12, Math.round(r * 2.2));
+      for (var s = 0; s < steps; s++){
+        var ang = (s / steps) * Math.PI * 2;
+        octx.drawImage(sil, 0, 0, ow, oh, ot + Math.cos(ang) * r, ot + Math.sin(ang) * r, ow, oh);
+      }
+    }
+    octx.drawImage(sil, 0, 0, ow, oh, ot, ot, ow, oh);
+    cv.width = keyedCanvas.width + 2 * t; cv.height = keyedCanvas.height + 2 * t;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(oc, 0, 0, cv.width, cv.height);
+    ctx.drawImage(keyedCanvas, t, t);
+    applyZoom();
+    $("stageInfo").textContent = "色抜き確定済み＋フチ（" + t + "px）：" + cv.width + "×" + cv.height + "px";
+  }
+
+  function updateFuchiLock(){
+    var locked = stage !== "done";
+    $("fuchiLock").style.display = locked ? "block" : "none";
+    $("fuchiControls").className = locked ? "lockwrap" : "";
+    Array.prototype.forEach.call($("fuchiControls").querySelectorAll("button, input"), function(el){
+      el.disabled = locked;
+    });
+  }
+
+  // ---- ズーム ----
+  function applyZoom(){
+    var cv = $("cv");
+    if (!cv.width) return;
+    var boxW = $("prevScroll").clientWidth - 24;
+    if (zoomIdx === 0){
+      cv.style.width = "100%"; cv.style.height = "auto";
+      $("zoomInfo").textContent = "全体表示";
+    } else {
+      var z = ZOOMS[zoomIdx];
+      cv.style.width = Math.round(boxW * z) + "px"; cv.style.height = "auto";
+      $("zoomInfo").textContent = "拡大 ×" + z;
+    }
+  }
+
+  // ---- 保存 ----
+  function save(){
+    var cv = $("cv");
+    if (!srcData || !cv.width) return;
+    cv.toBlob(function(blob){
+      if (!blob){
+        $("msg").textContent = "保存に失敗しました。画像が大きすぎる場合はPCで試してください。";
+        return;
+      }
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+      resultUrl = URL.createObjectURL(blob);
+      $("resultImg").src = resultUrl;
+      $("resultBox").style.display = "block";
+      var a = document.createElement("a");
+      a.href = resultUrl;
+      a.download = "irokeshi.png";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      $("msg").textContent = "irokeshi.png を保存しました（" + cv.width + "×" + cv.height + "px）";
+    }, "image/png");
+  }
+
+  // ---- イベント ----
+  $("drop").addEventListener("click", function(){ $("fileInput").click(); });
+  $("fileInput").addEventListener("change", function(){ loadFile($("fileInput").files[0]); });
+  ["dragover", "dragleave", "drop"].forEach(function(ev){
+    $("drop").addEventListener(ev, function(e){ e.preventDefault(); });
+  });
+  $("drop").addEventListener("drop", function(e){
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    loadFile(f);
+  });
+
+  $("bgColor").addEventListener("input", function(){
+    bg = hexToRgb($("bgColor").value);
+    $("bgSwatch").style.background = $("bgColor").value;
+    distCache = null;
+    scheduleKey();
+  });
+  $("bgAuto").addEventListener("click", function(){
+    detectBg();
+    scheduleKey();
+  });
+  $("tolRange").addEventListener("input", function(){
+    $("tolVal").textContent = $("tolRange").value + "%";
+    scheduleKey();
+  });
+  $("softRange").addEventListener("input", function(){
+    $("softVal").textContent = $("softRange").value + "%";
+    scheduleKey();
+  });
+
+  $("tapModeBtn").addEventListener("click", function(){
+    tapMode = !tapMode;
+    $("tapModeBtn").textContent = tapMode ? "タップで抜く: オン" : "タップで抜く: オフ";
+    $("tapModeBtn").classList.toggle("toggleon", tapMode);
+    $("cv").style.cursor = tapMode ? "crosshair" : "";
+  });
+  $("tapClearBtn").addEventListener("click", function(){
+    taps = [];
+    $("tapClearBtn").disabled = true;
+    scheduleKey();
+    $("keyMsg").textContent = "タップで抜いた分を戻しました。";
+  });
+  $("cv").addEventListener("click", function(e){
+    if (!tapMode || !srcData) return;
+    var cv = $("cv");
+    var rect = cv.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    var x = Math.floor((e.clientX - rect.left) * cv.width / rect.width);
+    var y = Math.floor((e.clientY - rect.top) * cv.height / rect.height);
+    if (stage === "done" && fuchiOn){
+      var t = thickPx();
+      x -= t; y -= t;
+    }
+    x = Math.max(0, Math.min(srcCanvas.width - 1, x));
+    y = Math.max(0, Math.min(srcCanvas.height - 1, y));
+    taps.push({ x: x, y: y });
+    $("tapClearBtn").disabled = false;
+    scheduleKey();
+    $("keyMsg").textContent = "タップした場所から抜きました（" + taps.length + "箇所）。よければ確定してください。";
+  });
+
+  $("confirmBtn").addEventListener("click", function(){
+    if (!srcData) return;
+    var imgData = computeKeyed();
+    keyedCanvas.width = srcCanvas.width; keyedCanvas.height = srcCanvas.height;
+    keyedCanvas.getContext("2d").putImageData(imgData, 0, 0);
+    stage = "done";
+    updateFuchiLock();
+    compose();
+    $("keyMsg").textContent = "色抜きを確定しました。下のフチ取りが使えます。";
+  });
+
+  function segWire(segId, attr, fn){
+    Array.prototype.forEach.call($(segId).querySelectorAll("button"), function(btn){
+      btn.addEventListener("click", function(){
+        Array.prototype.forEach.call($(segId).querySelectorAll("button"), function(b){
+          b.classList.toggle("on", b === btn);
+        });
+        fn(btn.getAttribute(attr));
+      });
+    });
+  }
+  segWire("fuchiSeg", "data-fuchi", function(v){
+    fuchiOn = v === "on";
+    if (stage === "done") compose();
+  });
+  segWire("fuchiColorSeg", "data-fcolor", function(v){
+    fuchiColor = v;
+    $("fuchiColor").value = v;
+    if (stage === "done") compose();
+  });
+  $("fuchiColor").addEventListener("input", function(){
+    fuchiColor = $("fuchiColor").value;
+    Array.prototype.forEach.call($("fuchiColorSeg").querySelectorAll("button"), function(b){
+      b.classList.toggle("on", b.getAttribute("data-fcolor") === fuchiColor);
+    });
+    if (stage === "done") compose();
+  });
+  $("thickRange").addEventListener("input", function(){
+    $("thickVal").textContent = $("thickRange").value;
+    if (stage === "done") compose();
+  });
+
+  $("zoomFit").addEventListener("click", function(){ zoomIdx = 0; applyZoom(); });
+  $("zoomIn").addEventListener("click", function(){ zoomIdx = Math.min(3, zoomIdx + 1); applyZoom(); });
+  $("zoomOut").addEventListener("click", function(){ zoomIdx = Math.max(0, zoomIdx - 1); applyZoom(); });
+
+  $("savePng").addEventListener("click", save);
+})();
+</script>
+</body>
+</html>
