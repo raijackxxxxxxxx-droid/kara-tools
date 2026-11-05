@@ -83,11 +83,19 @@
   <div class="card" id="keyCard" style="display:none;">
     <h2>2. 色抜き（背景色を透過にする）</h2>
     <div class="row">
+      <label>抜き方</label>
+      <div class="seg" id="engineSeg">
+        <button data-eng="mask" class="on">新：マスク先行（試作）</button>
+        <button data-eng="flood">従来：端から色で抜く</button>
+      </div>
+    </div>
+    <div class="info">新方式（試作）は、輪郭を太く膨らませたマスクで内側を守り、外側は色を問わず全部抜きます。線の途切れからの侵入に強く、グラデーション背景にも効きます。</div>
+    <div class="row">
       <label>背景色</label>
-      <span class="swatch" id="bgSwatch"></span>
+      <span class="swatch" id="bgSwatch"></span><span id="bgSwatches"></span>
       <input type="color" id="bgColor" value="#ffffff">
       <button id="bgAuto" style="font-size:14px; padding:9px 14px;">自動に戻す</button>
-      <span class="info" style="margin-top:0;">四隅から自動判定しています</span>
+      <span class="info" style="margin-top:0;">フチ全体から自動判定しています（離れた色は最大4色まで拾います）</span>
     </div>
     <div class="row">
       <label for="tolRange">許容度</label>
@@ -157,6 +165,7 @@
   <div class="card foot">
     <b>使い方・注意</b><br>
     ・抜けるのは「画像のフチからつながっている、背景色に近い色」だけです。キャラクターの白い服や白目など、内側にある同じ色は抜けません。<br>
+    ・「新：マスク先行」（試作）は、輪郭を太く膨らませたマスクで内側を守ってから外側を全部抜く方式です。輪郭の線が途切れていても内側に侵入しにくく、背景がグラデーションでも外側をまとめて抜けます。代わりに、輪郭の外側すぐ近くの背景色に近い部分は少し削れることがあります。<br>
     ・指の輪の中や腕と体の間など、フチからつながっていない背景は「タップで抜く」でその場所をタップすると抜けます。<br>
     ・向いている素材は、白や単色の背景のイラスト、ファンアート、ロゴ、単色背景の生成画像などです。写真のような複雑な背景は苦手です（その場合はAI背景抜きの出番です）。<br>
     ・背景色の自動判定がずれたら、色の四角をタップして正しい背景色に直してください。<br>
@@ -179,7 +188,10 @@
   var keyedCanvas = document.createElement("canvas"); // 確定した色抜き結果
   var stage = "none";        // none | key（編集中） | done（確定済み）
   var bg = { r: 255, g: 255, b: 255 };
+  var bgList = [{ r: 255, g: 255, b: 255 }];
+  var engine = "mask";
   var distCache = null, distKey = "";
+  var nearIdx = null;
   var fuchiOn = false;
   var fuchiColor = "#ffffff";
   var taps = [];             // 「タップで抜く」の種（作業座標）
@@ -240,7 +252,19 @@
     im.src = url;
   }
 
-  // 背景色の自動判定: フチのピクセル（不透明なもの）を色で集計し、最頻色の平均を取る
+  // 背景色の自動判定: フチのピクセルを色で集計し、離れた色は別々に最大4色まで拾う
+  function renderBgChips(){
+    var sp = $("bgSwatches");
+    sp.innerHTML = "";
+    for (var i = 1; i < bgList.length; i++){
+      var el = document.createElement("span");
+      el.className = "swatch";
+      el.style.width = "18px"; el.style.height = "18px";
+      el.style.marginLeft = "4px";
+      el.style.background = rgbToHex(bgList[i]);
+      sp.appendChild(el);
+    }
+  }
   function detectBg(){
     if (!srcData) return;
     var d = srcData.data, W = srcCanvas.width, H = srcCanvas.height;
@@ -256,28 +280,56 @@
     var x, y;
     for (x = 0; x < W; x += 3){ sample(x, 0); sample(x, H - 1); }
     for (y = 0; y < H; y += 3){ sample(0, y); sample(W - 1, y); }
-    var best = null;
-    for (var k in buckets){ if (!best || buckets[k].n > best.n) best = buckets[k]; }
-    if (best){
-      bg = { r: best.r / best.n, g: best.g / best.n, b: best.b / best.n };
-    } else {
-      bg = { r: 255, g: 255, b: 255 };
+    var arr = [];
+    for (var k in buckets){
+      var b0 = buckets[k];
+      arr.push({ n: b0.n, r: b0.r / b0.n, g: b0.g / b0.n, b: b0.b / b0.n });
     }
+    arr.sort(function(a, b){ return b.n - a.n; });
+    var total = 0;
+    arr.forEach(function(b){ total += b.n; });
+    var chosen = [], covered = 0;
+    for (var ai = 0; ai < arr.length && chosen.length < 4; ai++){
+      var cand = arr[ai];
+      var far = true;
+      for (var ci = 0; ci < chosen.length; ci++){
+        var dr = cand.r - chosen[ci].r, dg = cand.g - chosen[ci].g, db = cand.b - chosen[ci].b;
+        if (Math.sqrt(dr * dr + dg * dg + db * db) <= 55){ far = false; break; }
+      }
+      if (!far) continue;
+      chosen.push({ r: cand.r, g: cand.g, b: cand.b });
+      covered += cand.n;
+      if (total > 0 && covered / total >= 0.93) break;
+    }
+    if (!chosen.length) chosen = [{ r: 255, g: 255, b: 255 }];
+    bgList = chosen;
+    bg = bgList[0];
     $("bgColor").value = rgbToHex(bg);
     $("bgSwatch").style.background = rgbToHex(bg);
+    renderBgChips();
     distCache = null;
   }
 
   // ---- 色抜き計算 ----
   function computeDist(){
-    var key = bg.r.toFixed(1) + "," + bg.g.toFixed(1) + "," + bg.b.toFixed(1);
+    var key = bgList.map(function(c){
+      return c.r.toFixed(1) + "," + c.g.toFixed(1) + "," + c.b.toFixed(1);
+    }).join("|");
     if (distCache && distKey === key) return distCache;
     var d = srcData.data, N = srcCanvas.width * srcCanvas.height;
     var dist = new Float32Array(N);
-    for (var i = 0; i < N; i++){
-      var dr = d[i * 4] - bg.r, dg = d[i * 4 + 1] - bg.g, db = d[i * 4 + 2] - bg.b;
-      dist[i] = Math.sqrt(dr * dr + dg * dg + db * db);
+    nearIdx = new Uint8Array(N);
+    var i, ci;
+    for (i = 0; i < N; i++) dist[i] = 1e12;
+    for (ci = 0; ci < bgList.length; ci++){
+      var c = bgList[ci];
+      for (i = 0; i < N; i++){
+        var dr = d[i * 4] - c.r, dg = d[i * 4 + 1] - c.g, db = d[i * 4 + 2] - c.b;
+        var dd = dr * dr + dg * dg + db * db;
+        if (dd < dist[i]){ dist[i] = dd; nearIdx[i] = ci; }
+      }
     }
+    for (i = 0; i < N; i++) dist[i] = Math.sqrt(dist[i]);
     distCache = dist; distKey = key;
     return dist;
   }
@@ -330,9 +382,111 @@
       // 半透明になった境界ピクセルは、背景色の混ざりを引いて色を戻す（アンブレンド）
       if (newA > 0 && cover < 1){
         var inv = 1 - cover;
-        o[j]     = Math.max(0, Math.min(255, Math.round((src[j]     - bg.r * inv) / cover)));
-        o[j + 1] = Math.max(0, Math.min(255, Math.round((src[j + 1] - bg.g * inv) / cover)));
-        o[j + 2] = Math.max(0, Math.min(255, Math.round((src[j + 2] - bg.b * inv) / cover)));
+        var nc = bgList[nearIdx ? nearIdx[i] : 0];
+        o[j]     = Math.max(0, Math.min(255, Math.round((src[j]     - nc.r * inv) / cover)));
+        o[j + 1] = Math.max(0, Math.min(255, Math.round((src[j + 1] - nc.g * inv) / cover)));
+        o[j + 2] = Math.max(0, Math.min(255, Math.round((src[j + 2] - nc.b * inv) / cover)));
+      }
+    }
+    return out;
+  }
+
+  // 矩形膨張（prefix sum で分離処理）。srcM: Uint8 0/1 → 半径Rだけ太らせた 0/1
+  function boxDilate(srcM, W, H, R){
+    if (R <= 0) return srcM;
+    var tmp = new Uint8Array(W * H), out = new Uint8Array(W * H);
+    var ps = new Int32Array(Math.max(W, H) + 1);
+    var x, y, a, b;
+    for (y = 0; y < H; y++){
+      ps[0] = 0;
+      for (x = 0; x < W; x++) ps[x + 1] = ps[x] + srcM[y * W + x];
+      for (x = 0; x < W; x++){
+        a = Math.max(0, x - R); b = Math.min(W - 1, x + R);
+        tmp[y * W + x] = (ps[b + 1] - ps[a]) > 0 ? 1 : 0;
+      }
+    }
+    for (x = 0; x < W; x++){
+      ps[0] = 0;
+      for (y = 0; y < H; y++) ps[y + 1] = ps[y] + tmp[y * W + x];
+      for (y = 0; y < H; y++){
+        a = Math.max(0, y - R); b = Math.min(H - 1, y + R);
+        out[y * W + x] = (ps[b + 1] - ps[a]) > 0 ? 1 : 0;
+      }
+    }
+    return out;
+  }
+
+  // 新方式（マスク先行・試作）:
+  // 「被写体らしい色（コア）」を太く膨らませたマスクを壁にして、外側を色を問わず全部抜く。
+  // 内側は構造的に守られる。マスクの帯（輪郭の外側R px）だけ色の近さで切り直してハロを防ぐ。
+  function computeKeyedMask(){
+    var W = srcCanvas.width, H = srcCanvas.height, N = W * H;
+    var dist = computeDist();
+    var tol = parseInt($("tolRange").value, 10);
+    var soft = parseInt($("softRange").value, 10);
+    var T = tol * 4.417;
+    var halfBand = soft * 0.9;
+    var t0 = Math.max(0, T - halfBand), t1 = T + halfBand;
+    var i, x, y;
+    var core = new Uint8Array(N);
+    for (i = 0; i < N; i++) core[i] = dist[i] > t1 ? 1 : 0;
+    var R = Math.max(3, Math.min(20, Math.round(Math.min(W, H) * 0.02)));
+    var wall = boxDilate(core, W, H, R);
+    var reached = new Uint8Array(N);
+    var stack = [];
+    function tryPushR(idx){ if (!reached[idx] && !wall[idx]){ reached[idx] = 1; stack.push(idx); } }
+    for (x = 0; x < W; x++){ tryPushR(x); tryPushR((H - 1) * W + x); }
+    for (y = 0; y < H; y++){ tryPushR(y * W); tryPushR(y * W + W - 1); }
+    while (stack.length){
+      var cur = stack.pop();
+      var cx = cur % W, cy = (cur / W) | 0;
+      if (cx > 0) tryPushR(cur - 1);
+      if (cx < W - 1) tryPushR(cur + 1);
+      if (cy > 0) tryPushR(cur - W);
+      if (cy < H - 1) tryPushR(cur + W);
+    }
+    var band = boxDilate(reached, W, H, R);
+    // タップで抜く: 囲まれた場所用。色距離の範囲内で広げる（マスクの内外は問わない）
+    var tapVis = new Uint8Array(N);
+    var tstack = [];
+    function tryPushT(idx){ if (!tapVis[idx] && dist[idx] <= t1){ tapVis[idx] = 1; tstack.push(idx); } }
+    for (var ti = 0; ti < taps.length; ti++){
+      var tIdx = taps[ti].y * W + taps[ti].x;
+      if (!tapVis[tIdx]){ tapVis[tIdx] = 1; tstack.push(tIdx); }
+    }
+    while (tstack.length){
+      var tc = tstack.pop();
+      var tx = tc % W, ty = (tc / W) | 0;
+      if (tx > 0) tryPushT(tc - 1);
+      if (tx < W - 1) tryPushT(tc + 1);
+      if (ty > 0) tryPushT(tc - W);
+      if (ty < H - 1) tryPushT(tc + W);
+    }
+    var src = srcData.data;
+    var out = new ImageData(W, H);
+    var o = out.data;
+    for (i = 0; i < N; i++){
+      var j = i * 4;
+      o[j] = src[j]; o[j + 1] = src[j + 1]; o[j + 2] = src[j + 2]; o[j + 3] = src[j + 3];
+      var a0 = src[j + 3];
+      if (a0 === 0) continue;
+      var cover = -1; // -1 = そのまま残す
+      if (reached[i]) cover = 0;
+      else if (tapVis[i] || (band[i] && dist[i] <= t1)){
+        var dd = dist[i];
+        if (dd <= t0) cover = 0;
+        else if (dd >= t1) cover = 1;
+        else cover = (dd - t0) / (t1 - t0);
+      }
+      if (cover < 0) continue;
+      var newA = Math.round(a0 * cover);
+      o[j + 3] = newA;
+      if (newA > 0 && cover < 1 && cover > 0){
+        var nc = bgList[nearIdx ? nearIdx[i] : 0];
+        var inv = 1 - cover;
+        o[j]     = Math.max(0, Math.min(255, Math.round((src[j]     - nc.r * inv) / cover)));
+        o[j + 1] = Math.max(0, Math.min(255, Math.round((src[j + 1] - nc.g * inv) / cover)));
+        o[j + 2] = Math.max(0, Math.min(255, Math.round((src[j + 2] - nc.b * inv) / cover)));
       }
     }
     return out;
@@ -340,12 +494,14 @@
 
   function computeKeyAndDraw(){
     if (!srcData) return;
-    var imgData = computeKeyed();
+    var imgData = engine === "mask" ? computeKeyedMask() : computeKeyed();
     var cv = $("cv");
     cv.width = srcCanvas.width; cv.height = srcCanvas.height;
     cv.getContext("2d").putImageData(imgData, 0, 0);
     applyZoom();
-    $("stageInfo").textContent = "色抜きの編集中です。決まったら「この色抜きで確定する」を押してください。";
+    $("stageInfo").textContent = "色抜きの編集中です" +
+      (engine === "mask" ? "（新方式・マスク先行の試作中）" : "（従来方式）") +
+      "。決まったら「この色抜きで確定する」を押してください。";
   }
 
   function scheduleKey(){
@@ -471,7 +627,9 @@
 
   $("bgColor").addEventListener("input", function(){
     bg = hexToRgb($("bgColor").value);
+    bgList = [bg];
     $("bgSwatch").style.background = $("bgColor").value;
+    renderBgChips();
     distCache = null;
     scheduleKey();
   });
@@ -521,7 +679,7 @@
 
   $("confirmBtn").addEventListener("click", function(){
     if (!srcData) return;
-    var imgData = computeKeyed();
+    var imgData = engine === "mask" ? computeKeyedMask() : computeKeyed();
     keyedCanvas.width = srcCanvas.width; keyedCanvas.height = srcCanvas.height;
     keyedCanvas.getContext("2d").putImageData(imgData, 0, 0);
     stage = "done";
@@ -540,6 +698,10 @@
       });
     });
   }
+  segWire("engineSeg", "data-eng", function(v){
+    engine = v;
+    scheduleKey();
+  });
   segWire("fuchiSeg", "data-fuchi", function(v){
     fuchiOn = v === "on";
     if (stage === "done") compose();
