@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>縦書きもじPNGメーカー（仮）— 縦書き文字を透過PNGにするツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=M+PLUS+Rounded+1c:wght@400;700;800&family=Shippori+Mincho:wght@400;700;800&family=Kaisei+Decol:wght@400;700&family=Yusei+Magic&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+--bg:#171a21; --panel:#21252f; --panel2:#282d3a; --line:#3a4152;
+--text:#eef1f6; --sub:#9aa5b5; --accent:#ffd34d; --accent-text:#231a00;
+--btn:#39415a; --btn-text:#eef1f6;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+body{margin:0; background:var(--bg); color:var(--text);
+font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;}
+.wrap{max-width:720px; margin:0 auto; padding:16px 14px 40px;}
+h1{font-size:20px; margin:6px 0 2px;}
+.lead{color:var(--sub); font-size:13px; margin:0 0 14px; line-height:1.6;}
+.card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px;}
+.card h2{font-size:14px; margin:0 0 10px; color:var(--sub); font-weight:600; letter-spacing:.05em;}
+.row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
+.row:last-child{margin-bottom:0;}
+textarea{width:100%; min-height:110px; font-size:17px; padding:12px; border-radius:10px;
+border:1px solid var(--line); background:var(--panel2); color:var(--text); line-height:1.5;}
+select{font-size:15px; padding:10px; border-radius:10px; border:1px solid var(--line);
+background:var(--panel2); color:var(--text);}
+input[type="color"]{width:52px; height:40px; border:1px solid var(--line); border-radius:8px;
+background:var(--panel2); padding:2px;}
+input[type="range"]{flex:1; min-width:110px; accent-color:var(--accent);}
+label{font-size:14px; color:var(--sub);}
+.val{font-size:13px; color:var(--text); min-width:44px; text-align:right;}
+button{font-size:16px; padding:12px 16px; border-radius:10px; border:1px solid var(--line);
+background:var(--btn); color:var(--btn-text); cursor:pointer;}
+button:active{transform:scale(.97);}
+button.primary{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+button:disabled{opacity:.45; cursor:default;}
+.out{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px;}
+.item{margin-bottom:16px;}
+.item:last-child{margin-bottom:0;}
+.checker{border:1px solid var(--line); border-radius:10px; padding:10px;
+background:repeating-conic-gradient(#2c313e 0% 25%, #232733 0% 50%) 0 0/22px 22px;
+text-align:center; overflow-x:auto;}
+#outBox.mode-black.checker{background:#000;}
+#outBox.mode-white.checker{background:#ffffff;}
+.bgbar{display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;}
+.bgbar.cap{font-size:13px; color:var(--sub);}
+.bgbtn{font-size:13px; padding:7px 14px; border-radius:999px;}
+.bgbtn.on{background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:700;}
+.checker img{max-width:100%; height:auto;}
+.itemrow{display:flex; gap:8px; align-items:center; margin-top:8px;}
+.fname{flex:1; font-size:13px; color:var(--sub); word-break:break-all;}
+a.dl{display:inline-block; font-size:14px; padding:9px 14px; border-radius:10px; text-decoration:none;
+background:var(--btn); color:var(--btn-text); border:1px solid var(--line);}
+.set{margin-bottom:16px;}
+.set:last-child{margin-bottom:0;}
+.lab{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;}
+.lname{font-size:14px; color:var(--sub);}
+select.full{width:100%;}
+input[type="range"].full{width:100%; flex:none; min-width:0;}
+.msg{min-height:20px; font-size:13px; color:var(--accent); margin-top:8px;}
+.foot{color:var(--sub); font-size:12px; line-height:1.7;}
+.foot b{color:var(--text);}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>📜 縦書きもじPNGメーカー（仮）</h1>
+<p class="lead">テキストを縦書き（上から下、列は右から左）で透過PNGにします。1行ごとに1枚の画像になります。縦書きタイトルやバナーなどの演出素材づくりに。フォントはWebフォント（Google Fonts）を使います。</p>
+
+<div class="card">
+<h2>テキスト（1行 = 1枚の画像）</h2>
+<textarea id="textInput" placeholder="ここにテキストを入力&#10;改行するごとに&#10;別の画像になります">本日は晴天なり
+配信開始のお知らせ
+縦書きタイトル</textarea>
+</div>
+
+<div class="card">
+<h2>見た目の設定</h2>
+<div class="set">
+<div class="lab"><span class="lname">フォント</span></div>
+<select id="fontSel" class="full">
+<option value="'Noto Sans JP',sans-serif" selected>Noto Sans JP（ゴシック）</option>
+<option value="'M PLUS Rounded 1c',sans-serif">M PLUS Rounded 1c（丸ゴシック）</option>
+<option value="'Shippori Mincho',serif">しっぽり明朝</option>
+<option value="'Kaisei Decol',serif">解星デコール（装飾）</option>
+<option value="'Yusei Magic',sans-serif">Yusei Magic（手書き風）</option>
+</select>
+<select id="weightSel" class="full" style="margin-top:8px;">
+<option value="400">通常</option>
+<option value="700" selected>太字</option>
+<option value="900">極太</option>
+</select>
+</div>
+<div class="set">
+<div class="lab"><span class="lname">1列の文字数</span></div>
+<select id="colSel" class="full">
+<option value="5">5文字</option>
+<option value="10" selected>10文字</option>
+<option value="15">15文字</option>
+<option value="20">20文字</option>
+<option value="0">1列に収める（折り返しなし）</option>
+</select>
+</div>
+<div class="set">
+<div class="lab"><span class="lname">サイズ</span><span class="val" id="sizeVal">96px</span></div>
+<input type="range" class="full" id="sizeRange" min="32" max="240" value="96">
+</div>
+<div class="set">
+<div class="lab"><span class="lname">余白</span><span class="val" id="padVal">16px</span></div>
+<input type="range" class="full" id="padRange" min="0" max="60" value="16">
+</div>
+<div class="set">
+<div class="lab"><span class="lname">文字色</span><input type="color" id="textColor" value="#ffffff"></div>
+</div>
+<div class="set">
+<div class="lab"><span class="lname">縁取り</span><span style="display:flex; align-items:center; gap:8px;"><span class="val" id="strokeVal">6px</span><input type="color" id="strokeColor" value="#22242c"></span></div>
+<input type="range" class="full" id="strokeRange" min="0" max="24" value="6">
+</div>
+<div class="set">
+<div class="lab"><span class="lname"><label style="color:var(--text); font-size:15px;"><input type="checkbox" id="shadowOn" checked> 影</label></span><input type="color" id="shadowColor" value="#000000"></div>
+</div>
+<div class="set">
+<div class="lab"><span class="lname">影のぼかし</span><span class="val" id="shadowBlurVal">8px</span></div>
+<input type="range" class="full" id="shadowBlur" min="0" max="40" value="8">
+</div>
+<div class="set">
+<div class="lab"><span class="lname">影の距離</span><span class="val" id="shadowOffVal">5px</span></div>
+<input type="range" class="full" id="shadowOff" min="0" max="30" value="5">
+</div>
+</div>
+
+<div class="card">
+<div class="row">
+<button id="genBtn" class="primary" style="flex:1;">画像を作る</button>
+<button id="zipBtn" style="flex:1;" disabled>一括保存（zip）</button>
+</div>
+<div id="msg" class="msg"></div>
+</div>
+
+<div class="out mode-checker" id="outBox" style="display:none;">
+<div class="bgbar">
+<span class="cap">プレビューの背景</span>
+<button class="bgbtn on" data-mode="mode-checker">チェック</button>
+<button class="bgbtn" data-mode="mode-black">黒</button>
+<button class="bgbtn" data-mode="mode-white">白</button>
+<span class="cap">※書き出す画像は常に透明です</span>
+</div>
+<div id="outList"></div>
+</div>
+
+<div class="card foot">
+<b>使い方・注意</b><br>
+・プレビュー画像は、PCなら右クリック、スマホなら長押しでも保存できます。各画像の「保存」ボタンでも落とせます。<br>
+・空行はスキップされます。ファイル名は tategaki_01.png のような連番です。<br>
+・文字は上から下へ流れ、「1列の文字数」を超えると左隣の列へ続きます（列は右から左）。文中のスペースは空白のマスとして残ります。<br>
+・約物（、。や「」など）は縦書き用に回転して描きます。英数字は回転せず、そのまま縦に並びます。<br>
+・Webフォントを使うため、表示にはネット接続が必要です。フォントの読み込みに少し時間がかかることがあります。<br>
+・Google Fonts のフォントはオープンライセンス（OFL）です。商用利用も可能な範囲ですが、詳細は各フォントのライセンスを確認してください。
+</div>
+
+<p class="foot"><a href="../../index.html" style="color:var(--sub);">← カラの道具箱へ戻る</a>　／　<a href="../../LICENSE" style="color:var(--sub);">MIT License</a></p>
+</div>
+
+<script>
+(function(){
+"use strict";
+var $ = function(id){ return document.getElementById(id);};
+var results = []; // {blob, name}
+var timer = null;
+
+// 縦書き用に90°時計回りへ回転させる文字（括弧・約物・長音など）
+var ROTATE = "、。，．：；！？「」『』（）［］｛｝ー〜…‥・ヽヾ";
+// 、と。は90°回転だと左上に寄ってしまうため、右上に来るよう180°回転させる
+var ROTATE180 = "、。";
+
+function fontFamily(){
+var v = $("fontSel").value;
+return v.split(",")[0].replace(/'/g, "");
+}
+function fontSpec(){
+return $("weightSel").value + " " + $("sizeRange").value + "px " + $("fontSel").value;
+}
+function pad2(n){ return (n < 10? "0": "") + n;}
+
+// 縦書きレイアウト: {cols, rows} を返す（検証・ラベル表示にも使う）
+function layoutOf(text){
+var chars = Array.from(text);
+var per = parseInt($("colSel").value, 10);
+if (per <= 0 || per > chars.length) per = Math.max(chars.length, 1);
+var cols = Math.max(1, Math.ceil(chars.length / per));
+var rows = Math.min(per, chars.length);
+return { chars: chars, per: per, cols: cols, rows: rows};
+}
+
+function renderLine(text){
+var size = parseInt($("sizeRange").value, 10);
+var pad = parseInt($("padRange").value, 10);
+var strokeW = parseInt($("strokeRange").value, 10);
+var shadowOn = $("shadowOn").checked;
+var sBlur = shadowOn? parseInt($("shadowBlur").value, 10): 0;
+var sOff = shadowOn? parseInt($("shadowOff").value, 10): 0;
+
+var lay = layoutOf(text);
+var colW = size * 1.15;
+var rowH = size * 1.08;
+var margin = pad + strokeW + sBlur + Math.max(sOff, 0) + 2;
+var W = Math.ceil(margin * 2 + lay.cols * colW);
+var H = Math.ceil(margin * 2 + lay.rows * rowH);
+
+var cv = document.createElement("canvas");
+cv.width = W; cv.height = H;
+var ctx = cv.getContext("2d");
+ctx.font = fontSpec();
+ctx.textAlign = "center";
+ctx.textBaseline = "middle";
+ctx.lineJoin = "round";
+ctx.miterLimit = 2;
+
+// col: 右端の列が0（最初の列）, row: 上が0
+function cellCenter(idx){
+var colFromRight = Math.floor(idx / lay.per);
+var row = idx % lay.per;
+var colFromLeft = lay.cols - 1 - colFromRight;
+return {
+x: margin + colFromLeft * colW + colW / 2,
+y: margin + row * rowH + rowH / 2
+};
+}
+
+function drawPass(isStroke){
+lay.chars.forEach(function(ch, idx){
+if (ch === " " || ch === "　") return; // 空白はマスだけ確保
+var p = cellCenter(idx);
+ctx.save();
+ctx.translate(p.x, p.y);
+if (ROTATE180.indexOf(ch) >= 0) ctx.rotate(Math.PI);
+else if (ROTATE.indexOf(ch) >= 0) ctx.rotate(Math.PI / 2);
+if (isStroke) ctx.strokeText(ch, 0, 0);
+else ctx.fillText(ch, 0, 0);
+ctx.restore();
+});
+}
+
+function setShadow(on){
+if (on && shadowOn){
+ctx.shadowColor = $("shadowColor").value;
+ctx.shadowBlur = sBlur;
+ctx.shadowOffsetX = 0;
+ctx.shadowOffsetY = sOff;
+} else {
+ctx.shadowColor = "transparent";
+ctx.shadowBlur = 0;
+ctx.shadowOffsetX = 0;
+ctx.shadowOffsetY = 0;
+}
+}
+
+if (strokeW > 0){
+setShadow(true);
+ctx.strokeStyle = $("strokeColor").value;
+ctx.lineWidth = strokeW * 2;
+drawPass(true);
+// 影は縁取り（最初の描画）で一度だけ付ける
+setShadow(false);
+} else {
+setShadow(true);
+}
+ctx.fillStyle = $("textColor").value;
+drawPass(false);
+setShadow(false);
+return { canvas: cv, cols: lay.cols, rows: lay.rows};
+}
+
+function generate(){
+var lines = $("textInput").value.split("\n")
+.map(function(s){ return s.replace(/\s+$/,"");})
+.filter(function(s){ return s.trim()!== "";});
+var out = $("outList");
+out.innerHTML = "";
+results = [];
+if (!lines.length){
+$("msg").textContent = "テキストがありません";
+$("outBox").style.display = "none";
+$("zipBtn").disabled = true;
+return;
+}
+$("msg").textContent = "フォントを読み込んでいます…";
+var fam = fontFamily();
+var spec = $("weightSel").value + " 40px '" + fam + "'";
+document.fonts.load(spec).then(function(){
+return document.fonts.ready;
+}).then(function(){
+lines.forEach(function(text, i){
+var r = renderLine(text);
+var cv = r.canvas;
+var name = "tategaki_" + pad2(i + 1) + ".png";
+var item = document.createElement("div");
+item.className = "item";
+var chk = document.createElement("div");
+chk.className = "checker";
+var img = document.createElement("img");
+img.alt = text;
+chk.appendChild(img);
+item.appendChild(chk);
+var row = document.createElement("div");
+row.className = "itemrow";
+var fn = document.createElement("span");
+fn.className = "fname";
+fn.textContent = name + "（" + cv.width + "×" + cv.height + "px・" + r.cols + "列） " + text;
+row.appendChild(fn);
+var a = document.createElement("a");
+a.className = "dl";
+a.textContent = "保存";
+a.download = name;
+row.appendChild(a);
+item.appendChild(row);
+out.appendChild(item);
+cv.toBlob(function(blob){
+results[i] = { blob: blob, name: name};
+var url = URL.createObjectURL(blob);
+img.src = url;
+a.href = url;
+$("zipBtn").disabled = results.filter(Boolean).length!== lines.length;
+if (i === lines.length - 1){
+$("msg").textContent = lines.length + "枚の画像を作りました";
+}
+}, "image/png");
+});
+$("outBox").style.display = "block";
+}).catch(function(){
+$("msg").textContent = "フォントの読み込みに失敗しました。ネット接続を確認してもう一度試してください。";
+});
+}
+
+$("zipBtn").addEventListener("click", function(){
+if (typeof JSZip === "undefined"){
+$("msg").textContent = "zipライブラリの読み込みに失敗しました。各画像の保存ボタンを使ってください。";
+return;
+}
+var zip = new JSZip();
+results.forEach(function(r){ if (r) zip.file(r.name, r.blob);});
+$("msg").textContent = "zipを作成しています…";
+zip.generateAsync({ type: "blob"}).then(function(blob){
+var a = document.createElement("a");
+a.href = URL.createObjectURL(blob);
+a.download = "tategaki_png.zip";
+document.body.appendChild(a);
+a.click();
+a.remove();
+$("msg").textContent = "zipを保存しました";
+});
+});
+
+function bindVal(rangeId, valId, unit){
+$(rangeId).addEventListener("input", function(){
+$(valId).textContent = $(rangeId).value + unit;
+scheduleRegen();
+});
+}
+function scheduleRegen(){
+clearTimeout(timer);
+timer = setTimeout(generate, 350);
+}
+bindVal("sizeRange", "sizeVal", "px");
+bindVal("padRange", "padVal", "px");
+bindVal("strokeRange", "strokeVal", "px");
+bindVal("shadowBlur", "shadowBlurVal", "px");
+bindVal("shadowOff", "shadowOffVal", "px");
+["fontSel","weightSel","colSel","textColor","strokeColor","shadowColor","shadowOn"].forEach(function(id){
+$(id).addEventListener("change", scheduleRegen);
+$(id).addEventListener("input", scheduleRegen);
+});
+$("textInput").addEventListener("input", scheduleRegen);
+$("genBtn").addEventListener("click", generate);
+
+Array.prototype.forEach.call(document.querySelectorAll(".bgbtn"), function(btn){
+btn.addEventListener("click", function(){
+$("outBox").className = "out " + btn.getAttribute("data-mode");
+Array.prototype.forEach.call(document.querySelectorAll(".bgbtn"), function(b){
+b.classList.toggle("on", b === btn);
+});
+});
+});
+
+generate();
+})();
+</script>
+</body>
+</html>
