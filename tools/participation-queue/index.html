@@ -50,6 +50,8 @@
   .del{flex:none; width:40px; height:48px; padding:0; font-size:16px; color:var(--sub);}
   .empty{color:var(--sub); text-align:center; padding:18px 0; font-size:14px;}
   .msg{min-height:20px; font-size:13px; color:var(--accent); margin-top:8px;}
+  .copytext{font-size:13px; color:var(--sub); margin-top:8px; word-break:break-all; line-height:1.5;}
+  .copytext b{color:var(--text); font-weight:600;}
   .foot{color:var(--sub); font-size:12px; line-height:1.7;}
   .foot b{color:var(--text);}
 </style>
@@ -66,6 +68,16 @@
       <button id="confirmBtn" class="primary" style="flex:1;">この枠で参加した（全員 +1）</button>
     </div>
     <p class="foot" style="margin:8px 0 0;">1ゲーム終わったらこれを押すだけ。光が次の人たちへ移ります。</p>
+    <div class="row" style="margin-top:12px;">
+      <select id="copyFormat" title="コピーする文の書式">
+        <option value="comment" selected>主コメ用（次は〇〇さんです）</option>
+        <option value="label">画面用・見出し付き（次の参加者：）</option>
+        <option value="names">名前だけ</option>
+      </select>
+      <button id="copyBtn" style="flex:1;">「次は誰」をコピー</button>
+    </div>
+    <div id="copyPreview" class="copytext"></div>
+    <div id="copyMsg" class="msg" style="margin-top:4px;"></div>
   </div>
 
   <div class="card">
@@ -115,6 +127,7 @@
     ・名前を追加すると、参加回数が一番少ない人から枠の人数だけ光ります（同点なら先に来た人から）。<br>
     ・一時離脱（トイレ・お風呂など）はその人の <b>+</b> を押すと回数が増えて光が消え、次の人へ回ります。場の回数が追いつけば自然にローテーションへ戻ります。離席が長くて場が先に進んでしまったら、戻ってきた人の <b>+</b> を進んだ分だけ押して、回数を場に合わせてください。並び順は変わりません。<br>
     ・表示は到着順のまま固定です。リストが勝手にシャッフルされることはありません。<br>
+    ・「次は誰」をコピーすると、今光っている参加者の文がクリップボードに入ります。主コメに貼る用と、OBSのテキストソースに貼る用（見出し付き／名前だけ）の書式が選べます。枠が進むとコピーされる文も次の人たちに切り替わります。<br>
     ・データは保存されません。ページを閉じたり再読み込みするとリセットされます（無料版の仕様です）。
   </div>
 
@@ -150,6 +163,23 @@
     // avg
     var sum = counts.reduce(function(a,b){ return a+b; }, 0);
     return Math.round(sum / counts.length);
+  }
+
+  // 次の参加者の名前（優先順：回数が少ない→先に来た）
+  function nextNames(){
+    return people.slice().sort(function(a,b){
+      return (a.count - b.count) || (a.seq - b.seq);
+    }).slice(0, frameSize()).map(function(p){ return p.name; });
+  }
+
+  // コピーする文（書式プリセットで組み立て）
+  function copyText(){
+    var names = nextNames();
+    if (!names.length) return "";
+    var fmt = $("copyFormat").value;
+    if (fmt === "label") return "次の参加者：" + names.join(" ／ ");
+    if (fmt === "names") return names.join(" ／ ");
+    return "次は " + names.join("さん、") + "さんです";
   }
 
   // 次の枠に入る人たち（count昇順 → seq昇順 の先頭N人）
@@ -204,13 +234,14 @@
     if (people.length === 0){
       nextEl.className = "nextempty";
       nextEl.textContent = "まだ参加者がいません";
+      $("copyPreview").textContent = "";
+      $("copyBtn").disabled = true;
     } else {
-      // 次の参加者は「優先順（回数が少ない→先に来た）」で表示する
-      var names = people.slice().sort(function(a,b){
-        return (a.count - b.count) || (a.seq - b.seq);
-      }).slice(0, frameSize()).map(function(p){ return p.name; });
       nextEl.className = "nextnames";
-      nextEl.textContent = names.join(" ／ ");
+      nextEl.textContent = nextNames().join(" ／ ");
+      $("copyPreview").innerHTML = "コピーされる文：<b></b>";
+      $("copyPreview").querySelector("b").textContent = copyText();
+      $("copyBtn").disabled = false;
     }
   }
 
@@ -249,7 +280,34 @@
   $("confirmBtn").addEventListener("click", function(){
     var set = nextSet();
     people.forEach(function(p){ if (set[p.seq]) p.count++; });
+    $("copyMsg").textContent = "";
     render();
+  });
+
+  $("copyFormat").addEventListener("change", function(){
+    $("copyMsg").textContent = "";
+    render();
+  });
+
+  $("copyBtn").addEventListener("click", function(){
+    var text = copyText();
+    if (!text) return;
+    function done(){ $("copyMsg").textContent = "コピーしました：" + text; }
+    function fallback(){
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); done(); }
+      catch (e){ $("copyMsg").textContent = "コピーできませんでした。プレビューの文を長押しでコピーしてください。"; }
+      ta.remove();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else {
+      fallback();
+    }
   });
 
   $("frameSize").addEventListener("change", render);
